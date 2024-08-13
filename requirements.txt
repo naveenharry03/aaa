@@ -1,0 +1,10 @@
+pydantic_settings
+tqdm
+loguru
+colorama
+jedi
+python-iso639
+python-dotenv
+prettytable
+tiktoken
+openai
