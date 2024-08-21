@@ -127,3 +127,54 @@ You can run the tests using the following command:
 
 ```bash
 python -m unittest discover -s tests
+
+
+# Simple Application - Code Analyzer Test Repository
+
+This repository is designed for testing a code analyzer by providing a simple Python application with basic code structures and concepts.
+
+## File Structure and Concepts
+
+Here's a breakdown of the files and the concepts they illustrate:
+
+**calculator:**
+
+- **calculator.py:**
+  - **Class:** `Calculator`
+  - **Functions:** `__init__`, `sum`, `difference`
+  - **Type Annotations:** `int` 
+  - **Imports:** `utils.math_utils` 
+
+**utils:**
+
+- **math_utils.py:**
+  - **Functions:** `add`, `subtract`
+  - **Type Annotations:** `int`
+
+- **string_utils.py:**
+  - **Functions:** `reverse_string`
+  - **Type Annotations:** `str`
+
+**tests:**
+
+- **test_calculator.py:**
+  - **Functions:** `test_sum`, `test_difference`
+  - **Type Annotations:** None (in this example)
+  - **Imports:** `calculator`, `unittest`
+
+**main.py:**
+
+- **Functions:** `calculate_sum`, `calculate_difference`, `root`
+- **Type Annotations:** `int`, `str`
+- **Imports:** `fastapi`, `calculator`, `uvicorn`
+
+**requirements.txt:**
+
+- **List of Dependencies:**  `fastapi`, `uvicorn`
+
+## Running Tests
+
+You can run the tests using the following command:
+
+```bash
+python -m unittest discover -s tests
