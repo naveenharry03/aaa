@@ -125,8 +125,8 @@ Here's a breakdown of the files and the concepts they illustrate:
 
 You can run the tests using the following command:
 
-```bash
-python -m unittest discover -s tests
+#bash
+#python -m unittest discover -s tests
 
 
 # Simple Application - Code Analyzer Test Repository
