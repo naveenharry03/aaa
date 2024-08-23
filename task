@@ -10,9 +10,15 @@ def update_csv_with_token_details(csv_file, doc_item):
         reader = csv.reader(infile)
         rows = list(reader)
 
-    # Update the header with new columns
+    # Update the header with new columns if they don't already exist
     header = rows[0]
-    header.extend(["prompt_template", "promptdata", "model_input"])
+    new_columns = ["prompt_template", "promptdata", "model_input"]
+    for col in new_columns:
+        if col not in header:
+            header.append(col)
+
+    # Create a mapping from column names to indices
+    col_indices = {col: idx for idx, col in enumerate(header)}
 
     # Update the rows with new data
     updated_rows = [header]
@@ -22,11 +28,14 @@ def update_csv_with_token_details(csv_file, doc_item):
 
         # Compare with doc_item.get_full_name()
         if path == doc_item.get_full_name():
-            row.extend([
-                token_details.get("prompt_template"),
-                token_details.get("promptdata"),
-                token_details.get("model_input"),
-            ])
+            # Ensure the row has enough columns to accommodate the new data
+            while len(row) < len(header):
+                row.append('')
+
+            # Update the row with new data
+            row[col_indices["prompt_template"]] = token_details.get("prompt_template")
+            row[col_indices["promptdata"]] = token_details.get("promptdata")
+            row[col_indices["model_input"]] = token_details.get("model_input")
 
         updated_rows.append(row)
 
