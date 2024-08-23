@@ -1,0 +1,29 @@
+ def update_tasklist_with_llm_details(self, doc_item):
+        """Updates tasklist.csv with LLM call details for the given doc_item."""
+        try:
+            # Open tasklist.csv in read mode
+            with open('tasklist.csv', 'r', newline='') as csvfile:
+                reader = csv.DictReader(csvfile)
+                tasklist = list(reader)
+
+            # Add new columns for LLM call details
+            fieldnames = reader.fieldnames + ['LLM Calls', 'Total Tokens', 'Date', 'Timestamp']
+
+            # Open tasklist.csv in write mode
+            with open('tasklist.csv', 'w', newline='') as csvfile:
+                writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+                writer.writeheader()
+
+                for row in tasklist:
+                    path = row['Path']
+                    # Find the corresponding row in the tasklist
+                    if path == doc_item.get_full_name():
+                        row['LLM Calls'] = self.llm_calls
+                        row['Total Tokens'] = self.total_tokens_per_call
+                        row['Date'] = datetime.date.today().strftime("%Y-%m-%d")
+                        row['Timestamp'] = datetime.datetime.now().strftime("%H:%M:%S")
+                        writer.writerow(row)
+                    else:
+                        writer.writerow(row)
+        except Exception as e:
+            logger.error(f"Error updating tasklist.csv: {e}")
