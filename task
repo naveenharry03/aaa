@@ -1,29 +1,49 @@
- def update_tasklist_with_llm_details(self, doc_item):
-        """Updates tasklist.csv with LLM call details for the given doc_item."""
-        try:
-            # Open tasklist.csv in read mode
-            with open('tasklist.csv', 'r', newline='') as csvfile:
-                reader = csv.DictReader(csvfile)
-                tasklist = list(reader)
+import csv
+import json
+import os
+from pathlib import Path
 
-            # Add new columns for LLM call details
-            fieldnames = reader.fieldnames + ['LLM Calls', 'Total Tokens', 'Date', 'Timestamp']
+def update_tasklist(json_file: str | Path, csv_file: str | Path):
+    """
+    Updates the tasklist.csv file with token details from the JSON file.
 
-            # Open tasklist.csv in write mode
-            with open('tasklist.csv', 'w', newline='') as csvfile:
-                writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
-                writer.writeheader()
+    Args:
+        json_file (str | Path): Path to the JSON file.
+        csv_file (str | Path): Path to the tasklist.csv file.
+    """
+    
+    with open(json_file, 'r') as f:
+        data = json.load(f)
 
-                for row in tasklist:
-                    path = row['Path']
-                    # Find the corresponding row in the tasklist
-                    if path == doc_item.get_full_name():
-                        row['LLM Calls'] = self.llm_calls
-                        row['Total Tokens'] = self.total_tokens_per_call
-                        row['Date'] = datetime.date.today().strftime("%Y-%m-%d")
-                        row['Timestamp'] = datetime.datetime.now().strftime("%H:%M:%S")
-                        writer.writerow(row)
-                    else:
-                        writer.writerow(row)
-        except Exception as e:
-            logger.error(f"Error updating tasklist.csv: {e}")
+    with open(csv_file, 'r', newline='') as infile, open(f"{os.path.splitext(csv_file)[0]}_updated.csv", 'w', newline='') as outfile:
+        reader = csv.reader(infile)
+        writer = csv.writer(outfile)
+
+        # Write the header row
+        header = next(reader)
+        header.extend(["prompt_template", "prompt_with_data", "model_input", "model_output", "model_total"])
+        writer.writerow(header)
+
+        for row in reader:
+            # Extract path from the row
+            path = row[2]
+            
+            # Find the matching element in the JSON data
+            for item in data:
+                if item['type'] + '/' + item['name'] == path:
+                    token_details = item.get('token_Details', {})
+                    row.extend([
+                        token_details.get("prompt_template"),
+                        token_details.get("prompt_with_data"),
+                        token_details.get("model_input"),
+                        token_details.get("model_output"),
+                        token_details.get("model_total"),
+                    ])
+                    break
+
+            writer.writerow(row)
+
+# Example usage:
+json_file = Path("./your_json_file.json")
+csv_file = Path("./tasklist.csv")
+update_tasklist(json_file, csv_file)
