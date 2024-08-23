@@ -1,64 +1,44 @@
-def update_tasklist(self, target_dir_path: str | Path, csv_file: str | Path):
-        """
-        Updates the tasklist.csv file with token details from the project_hierarchy.json file.
+import csv
 
-        Args:
-            target_dir_path (str | Path): Path to the target directory containing project_hierarchy.json.
-            csv_file (str | Path): Path to the tasklist.csv file.
-        """
-        project_hierarchy_json_path = os.path.join(target_dir_path, "project_hierarchy.json")
+# Sample token_details dictionary
+token_details = {'prompt_template': 444, 'promptdata': 1563, 'model_input': 125}
 
-        # Check if the JSON file exists
-        if not os.path.exists(project_hierarchy_json_path):
-            logger.error(f"File not found: {project_hierarchy_json_path}")
-            return
+# Function to update the CSV file
+def update_csv_with_token_details(csv_file, doc_item):
+    # Read the existing CSV data
+    with open(csv_file, 'r', newline='', encoding='utf-8') as infile:
+        reader = csv.reader(infile)
+        rows = list(reader)
 
-        with open(project_hierarchy_json_path, 'r', encoding='utf-8') as f:
-            try:
-                data = json.load(f)
-            except json.JSONDecodeError as e:
-                logger.error(f"Error decoding JSON: {e}")
-                return
+    # Update the header with new columns
+    header = rows[0]
+    header.extend(["prompt_template", "promptdata", "model_input"])
 
-        # Debugging: Check the structure of the data
-        logger.debug(f"Loaded JSON data: {data}")
+    # Update the rows with new data
+    updated_rows = [header]
+    for row in rows[1:]:
+        # Extract path from the row
+        path = row[3]  # Assuming the path is in the 4th column (index 3)
 
-        # Read the existing CSV data
-        with open(csv_file, 'r', newline='', encoding='utf-8') as infile:
-            reader = csv.reader(infile)
-            rows = list(reader)
+        # Compare with doc_item.get_full_name()
+        if path == doc_item.get_full_name():
+            row.extend([
+                token_details.get("prompt_template"),
+                token_details.get("promptdata"),
+                token_details.get("model_input"),
+            ])
 
-        # Update the header
-        header = rows[0]
-        header.extend(["prompt_template", "prompt_with_data", "model_input", "model_output", "model_total"])
+        updated_rows.append(row)
 
-        # Update the rows with new data
-        updated_rows = [header]
-        for row in rows[1:]:
-            # Extract path from the row
-            path = row[2]
-            path_parts = path.split('/')
-            file_name = path_parts[0]
-            class_or_func_name = path_parts[1]
-            func_name = path_parts[2] if len(path_parts) > 2 else None
+    # Write the updated data back to the same CSV file
+    with open(csv_file, 'w', newline='', encoding='utf-8') as outfile:
+        writer = csv.writer(outfile)
+        writer.writerows(updated_rows)
 
-            # Find the matching element in the JSON data
-            if file_name in data:
-                for item in data[file_name]:
-                    if item['name'] == class_or_func_name and (func_name is None or item['name'] == func_name):
-                        token_details = item.get('token_Details', {})
-                        row.extend([
-                            token_details.get("prompt_template"),
-                            token_details.get("prompt_with_data"),
-                            token_details.get("model_input"),
-                            token_details.get("model_output"),
-                            token_details.get("model_total"),
-                        ])
-                        break
+# Example usage
+class DocItem:
+    def get_full_name(self):
+        return "example/path/to/file"
 
-            updated_rows.append(row)
-
-        # Write the updated data back to the same CSV file
-        with open(csv_file, 'w', newline='', encoding='utf-8') as outfile:
-            writer = csv.writer(outfile)
-            writer.writerows(updated_rows)
+doc_item = DocItem()
+update_csv_with_token_details('tasklist.csv', doc_item)
