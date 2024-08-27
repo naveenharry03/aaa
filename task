@@ -52,3 +52,51 @@ class DocItem:
 
 doc_item = DocItem()
 update_csv_with_token_details('tasklist.csv', doc_item)
+
+
+def print_task_list(self, task_dict: Dict[int, Dict[str, Any]]):
+    '''Prints and updates the task list.'''
+    csv_file_path = 'task_list.csv'
+
+    # Check if the file exists. If not, create it with the header.
+    if not Path(csv_file_path).exists():
+        with open(csv_file_path, mode='w', newline='') as file:
+            writer = csv.writer(file)
+            writer.writerow(["task_id", "Doc Generation Reason", "Path", "dependency"])
+
+    # Read existing rows from the CSV file
+    existing_rows = []
+    with open(csv_file_path, mode='r', newline='') as file:
+        reader = csv.reader(file)
+        next(reader) # Skip the header row
+        existing_rows = list(reader)
+
+    # Update existing_rows with new information from task_dict
+    for task_id, task_info in task_dict.items():
+        # Check if the task_id is already present in the existing_rows
+        found = False
+        for i, row in enumerate(existing_rows):
+            if int(row[0]) == task_id:
+                existing_rows[i] = [
+                    task_id, 
+                    task_info['item_status'].name, 
+                    task_info['full_name'],
+                    ",".join([str(d_task_id) for d_task_id in task_info['dependencies']]) if 'dependencies' in task_info and task_info['dependencies'] else "None", 
+                ]
+                found = True
+                break
+
+        # If the task_id is not found, add a new row
+        if not found:
+            existing_rows.append([
+                task_id,
+                task_info['item_status'].name,
+                task_info['full_name'],
+                ",".join([str(d_task_id) for d_task_id in task_info['dependencies']]) if 'dependencies' in task_info and task_info['dependencies'] else "None"
+            ])
+
+    # Write the updated rows back to the CSV file
+    with open(csv_file_path, mode='w', newline='') as file:
+        writer = csv.writer(file)
+        writer.writerow(["task_id", "Doc Generation Reason", "Path", "dependency"])
+        writer.writerows(existing_rows)
