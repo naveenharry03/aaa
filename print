@@ -7,18 +7,6 @@ def print_task_list(self, task_dict: Dict[int, Dict[str, Any]]):
         with open(csv_file_path, mode='w', newline='') as file:
             writer = csv.writer(file)
             writer.writerow(["task_id", "Doc Generation Reason", "Path", "dependency"])
-            # Write the initial task_dict to the CSV file (sorted by status)
-            sorted_tasks = sorted(task_dict.items(), key=lambda item: item[1]['item_status'].value)
-            for task_id, task_info in sorted_tasks:
-                dependencies = []  # Initialize dependency as an empty list
-                if 'dependencies' in task_info and task_info['dependencies']:
-                    dependencies = [existing_rows[d_task_id][2] for d_task_id in task_info['dependencies'] if 0 <= d_task_id < len(existing_rows)]
-                writer.writerow([
-                    task_id + 1,  # Add 1 to the task ID
-                    task_info['item_status'].name,
-                    task_info['full_name'],
-                    dependencies,
-                ])
         return  # Exit if file is new, no need to update
 
     # Read existing rows from the CSV file
@@ -43,18 +31,13 @@ def print_task_list(self, task_dict: Dict[int, Dict[str, Any]]):
             # Write the new task_dict to the CSV file (sorted by status)
             sorted_tasks = sorted(task_dict.items(), key=lambda item: item[1]['item_status'].value)
             for task_id, task_info in sorted_tasks:
-                dependencies = []
-                if 'dependencies' in task_info and task_info['dependencies']:
-                    for d_task_id in task_info['dependencies']:
-                        if 0 <= d_task_id < len(existing_rows): # Check index bounds
-                            dependencies.append(existing_rows[d_task_id][2])
-                else:
-                    dependencies = "None"
+                # Use task_dict to find the path for dependencies
+                dependencies_paths = [task_dict[d_task_id]['full_name'] for d_task_id in task_info['dependencies']] if 'dependencies' in task_info and task_info['dependencies'] else []
                 writer.writerow([
                     task_id + 1,  # Add 1 to the task ID
                     task_info['item_status'].name,
                     task_info['full_name'],
-                    dependencies,
+                    " | ".join(dependencies_paths) if dependencies_paths else "None"
                 ])
         return  # Exit after overwriting
 
@@ -78,19 +61,18 @@ def print_task_list(self, task_dict: Dict[int, Dict[str, Any]]):
 
         # If the task is not found, add a new row with the next task ID
         if not found:
-            dependencies = []
-            if 'dependencies' in task_info and task_info['dependencies']:
-                if existing_rows:  # Only access existing_rows if it's not empty
-                    for d_task_id in task_info['dependencies']:
-                        if 0 <= d_task_id < len(existing_rows): # Check index bounds
-                            dependencies.append(existing_rows[d_task_id][2])
-            else:
-                dependencies = "None"
+            # Use existing_rows to find the path for dependencies (if available)
+            dependencies_paths = []
+            for d_task_id in task_info['dependencies'] if 'dependencies' in task_info else []:
+                for j, existing_row in enumerate(existing_rows):
+                    if int(existing_row[0]) == d_task_id:
+                        dependencies_paths.append(existing_row[2])  # Get path from existing_rows
+                        break
             existing_rows.append([
                 next_task_id,
                 task_info['item_status'].name,
                 task_info['full_name'],
-                dependencies,
+                " | ".join(dependencies_paths) if dependencies_paths else "None"
             ])
             next_task_id += 1
 
