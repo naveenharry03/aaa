@@ -1,0 +1,104 @@
+def print_task_list(self, task_dict: Dict[int, Dict[str, Any]]):
+    '''Prints and updates the task list.'''
+    csv_file_path = 'task_list.csv'
+
+    # Check if the file exists. If not, create it with the header.
+    if not Path(csv_file_path).exists():
+        with open(csv_file_path, mode='w', newline='') as file:
+            writer = csv.writer(file)
+            writer.writerow(["task_id", "Doc Generation Reason", "Path", "dependency"])
+            # Write the initial task_dict to the CSV file (sorted by status)
+            sorted_tasks = sorted(task_dict.items(), key=lambda item: item[1]['item_status'].value)
+            for task_id, task_info in sorted_tasks:
+                dependencies = []  # Initialize dependency as an empty list
+                if 'dependencies' in task_info and task_info['dependencies']:
+                    dependencies = [existing_rows[d_task_id][2] for d_task_id in task_info['dependencies'] if 0 <= d_task_id < len(existing_rows)]
+                writer.writerow([
+                    task_id + 1,  # Add 1 to the task ID
+                    task_info['item_status'].name,
+                    task_info['full_name'],
+                    dependencies,
+                ])
+        return  # Exit if file is new, no need to update
+
+    # Read existing rows from the CSV file
+    existing_rows = []
+    with open(csv_file_path, mode='r', newline='') as file:
+        reader = csv.reader(file)
+        next(reader) # Skip the header row
+        existing_rows = list(reader)
+
+    # Handle empty or None task_dict
+    if not task_dict:  # This checks for both None and empty dictionaries
+        return  # Exit if task_dict is empty or None, do not modify the CSV
+
+    # Check if all tasks in the existing_rows are "doc_up_to_date"
+    all_up_to_date = all([row[1] == "doc_up_to_date" for row in existing_rows])
+
+    # If all tasks are up-to-date, overwrite the CSV file
+    if all_up_to_date:
+        with open(csv_file_path, mode='w', newline='') as file:
+            writer = csv.writer(file)
+            writer.writerow(["task_id", "Doc Generation Reason", "Path", "dependency"])
+            # Write the new task_dict to the CSV file (sorted by status)
+            sorted_tasks = sorted(task_dict.items(), key=lambda item: item[1]['item_status'].value)
+            for task_id, task_info in sorted_tasks:
+                dependencies = []
+                if 'dependencies' in task_info and task_info['dependencies']:
+                    for d_task_id in task_info['dependencies']:
+                        if 0 <= d_task_id < len(existing_rows): # Check index bounds
+                            dependencies.append(existing_rows[d_task_id][2])
+                else:
+                    dependencies = "None"
+                writer.writerow([
+                    task_id + 1,  # Add 1 to the task ID
+                    task_info['item_status'].name,
+                    task_info['full_name'],
+                    dependencies,
+                ])
+        return  # Exit after overwriting
+
+    # Otherwise, update existing rows or add new rows 
+    # and use sequential task IDs
+    next_task_id = len(existing_rows) + 1
+    for task_id, task_info in task_dict.items():
+        # Check if the task is already present in the existing_rows based on path and status
+        found = False
+        for i, row in enumerate(existing_rows):
+            if row[2] == task_info['full_name'] and row[1] == task_info['item_status'].name:
+                # Update the row with the new dependency information (using existing dependency IDs)
+                existing_rows[i] = [
+                    row[0],  # Keep the existing task_id
+                    task_info['item_status'].name,
+                    task_info['full_name'],
+                    row[3], # Keep the existing dependency IDs
+                ]
+                found = True
+                break
+
+        # If the task is not found, add a new row with the next task ID
+        if not found:
+            dependencies = []
+            if 'dependencies' in task_info and task_info['dependencies']:
+                if existing_rows:  # Only access existing_rows if it's not empty
+                    for d_task_id in task_info['dependencies']:
+                        if 0 <= d_task_id < len(existing_rows): # Check index bounds
+                            dependencies.append(existing_rows[d_task_id][2])
+            else:
+                dependencies = "None"
+            existing_rows.append([
+                next_task_id,
+                task_info['item_status'].name,
+                task_info['full_name'],
+                dependencies,
+            ])
+            next_task_id += 1
+
+    # Sort the existing_rows by task_id
+    existing_rows.sort(key=lambda row: int(row[0]))
+
+    # Write the updated rows back to the CSV file
+    with open(csv_file_path, mode='w', newline='') as file:
+        writer = csv.writer(file)
+        writer.writerow(["task_id", "Doc Generation Reason", "Path", "dependency"])
+        writer.writerows(existing_rows)
