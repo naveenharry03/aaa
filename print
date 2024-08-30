@@ -84,3 +84,6 @@ def print_task_list(self, task_dict: Dict[int, Dict[str, Any]]):
         writer = csv.writer(file)
         writer.writerow(["task_id", "Doc Generation Reason", "Path", "dependency"])
         writer.writerows(existing_rows)
+
+
+code_string = "def add(x, y):\n  \"\"\"Adds two numbers.\"\"\"\n  return x + y\n\ndef subtract(x, y):\n  \"\"\"Subtracts two numbers.\"\"\"\n  return x - y"
