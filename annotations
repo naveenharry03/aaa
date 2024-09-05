@@ -1,0 +1,201 @@
+def get_functions_and_classes(self, code_content, file_path):
+        """
+        Retrieves all functions, classes, their parameters (if any), and their hierarchical relationships.
+        Output Examples: [('FunctionDef', 'AI_give_params', 86, 95, None, ['param1', 'param2']), ('ClassDef', 'PipelineEngine', 97, 104, None, []), ('FunctionDef', 'get_all_pys', 99, 104, 'PipelineEngine', ['param1'])]
+        On the example above, PipelineEngine is the Father structure for get_all_pys.
+
+        Args:
+            code_content: The code content of the whole file to be parsed.
+
+        Returns:
+            A list of tuples containing the type of the node (FunctionDef, ClassDef, AsyncFunctionDef),
+            the name of the node, the starting line number, the ending line number, the name of the parent node, and a list of parameters (if any).
+        """
+        tree = ast.parse(code_content)
+        output_folder = "temp_files"
+        if not os.path.exists(output_folder):
+            os.makedirs(output_folder)
+        output_file_path = os.path.join(output_folder, os.path.basename(file_path))
+        with open(output_file_path + ".txt", "w", encoding="utf-8") as output_file:
+            output_file.write(astpretty.pformat(tree))
+        self.add_parent_references(tree)
+
+
+        functions_and_classes = []
+        for node in ast.walk(tree):
+            if isinstance(node, (ast.FunctionDef, ast.ClassDef, ast.AsyncFunctionDef)):
+                start_line = node.lineno
+                end_line = self.get_end_lineno(node)
+                parameters = [arg.arg for arg in node.args.args] if 'args' in dir(node) else []
+                all_names = [item[1] for item in functions_and_classes]
+
+                # Extract Annotations
+                annotations = []
+                for decorator in node.decorator_list:
+                    if isinstance(decorator, ast.Call):
+                        # Analyze the decorator call to determine its type and data
+                        annotation_type = None
+                        annotation_data = None
+                        if isinstance(decorator.func, ast.Name): 
+                            annotation_type = decorator.func.id 
+                        elif isinstance(decorator.func, ast.Attribute): 
+                            annotation_type = decorator.func.attr 
+
+                            # Handle Common HTTP Methods (get, post, put, delete, etc.)
+                            http_methods = ['get', 'post', 'put', 'delete', 'patch', 'options', 'head']
+                            if decorator.func.attr in http_methods: # Check if the decorator is one of the common methods
+                                if decorator.args:  # Check for positional arguments
+                                    url = decorator.args[0].s  # The first argument is the URL path
+                                    annotation_data = {'api_endpoint': url}
+
+                        # Extract decorator arguments (if any)
+                        if decorator.keywords:
+                            for kwarg in decorator.keywords:
+                                if kwarg.arg == 'url':
+                                    annotation_data = {
+                                        'api_endpoint': kwarg.value.s 
+                                    }
+                                elif kwarg.arg == 'method':
+                                    annotation_data['method'] = kwarg.value.s
+
+                        # Handle decorators without keyword arguments (like sum_api)
+                        if annotation_type:
+                            if not annotation_data: # If there is no annotation_data, analyze the decorator's wrapper function
+                                wrapper_code = ast.unparse(decorator.func) # Get the wrapper function code
+                                wrapper_tree = ast.parse(wrapper_code)
+                                for inner_node in ast.walk(wrapper_tree):
+                                    # Check for `requests.get` call within the wrapper function's AST
+                                    if isinstance(inner_node, ast.Call):
+                                        if isinstance(inner_node.func, ast.Attribute) and inner_node.func.attr == 'get':
+                                            if inner_node.args and isinstance(inner_node.args[0], ast.Constant) and isinstance(inner_node.args[0].value, str):
+                                                annotation_data = {'api_endpoint': inner_node.args[0].value, 'method': 'GET'}
+                                        elif isinstance(inner_node.func, ast.Attribute) and inner_node.func.attr == 'request':
+                                            if inner_node.args:
+                                                annotation_data = {'api_endpoint': inner_node.args[0].s, 'method': inner_node.args[1].s}
+                                        # Add more checks for other requests methods (e.g., post, put, delete) if needed 
+
+                        annotations.append({
+                            'type': annotation_type,
+                            'data': annotation_data
+                        })
+
+                functions_and_classes.append(
+                    (type(node).__name__, node.name, start_line, end_line, parameters, annotations)
+                )
+        return functions_and_classes
+
+
+
+
+
+from fastapi import FastAPI
+from calculator import Calculator
+import uvicorn
+import asyncio
+import requests
+import math
+import json
+
+# GLOBAL VARIABLE
+GLOBAL_CONFIG = {
+    "api_version": "1.0.0",
+    "default_currency": "USD"
+}
+
+app = FastAPI()
+
+@app.get("/sum/{a}/{b}")
+def calculate_sum(a: int, b: int):
+    """Calculates the sum of two numbers."""
+    calc = Calculator()
+    return {"result": calc.sum(a, b), "api_version": GLOBAL_CONFIG["api_version"]}
+
+@app.get("/difference/{a}/{b}")
+def calculate_difference(a: int, b: int):
+    """Calculates the difference of two numbers."""
+    calc = Calculator()
+    return {"result": calc.difference(a, b)}
+
+@app.get("/multiply/{a}/{b}")
+async def calculate_multiply(a: int, b: int):
+    """Calculates the product of two numbers asynchronously."""
+    calc = Calculator()
+    return {"result": await calc.async_multiply(a, b)}
+
+@app.get("/double/{value}")
+def calculate_double(value: int):
+    """Doubles the given value."""
+    calc = Calculator()
+    return {"result": calc.double(value)}
+
+@app.get("/")
+async def root():  
+    return {"message": "Welcome to the calculator API!", "api_version": GLOBAL_CONFIG["api_version"]}
+
+
+# annotations using Function Wrapper
+
+def sum_api(func):
+    def wrapper(a: int, b: int, *args, **kwargs):
+        response = requests.get(f"http://127.0.0.1:8000/sum/{a}/{b}")
+        response.raise_for_status()
+        sum_result = response.json()["result"]
+        return func(sum_result, a, b, *args, **kwargs)  # Pass the sum to the function
+    return wrapper
+
+@sum_api  # Apply the decorator
+def perform_factorial_calculations(sum_result: int, a: int, b: int):
+    square_root = math.factorial(sum_result)
+    return square_root
+
+
+# annotations using Direct API Call
+
+def api_call(url: str, method: str = "GET"):
+    def decorator(func):
+        def wrapper(*args, **kwargs):
+            response = requests.request(method, url, *args, **kwargs)
+            response.raise_for_status()
+            return func(response.json(), *args, **kwargs)
+        return wrapper
+    return decorator
+
+@api_call(url="http://127.0.0.1:8000/difference/{a}/{b}", method="GET")  # Apply the decorator
+def perform_squareroot_calculations(api_response: dict, a: int, b: int):
+    sum_result = api_response["result"]
+    square_root = math.sqrt(sum_result)
+    # ... perform further calculations ... 
+    return square_root
+
+
+# annotations Using JSON structure
+
+def apply_annotations(func, annotation_json):
+    """Applies annotations to a function."""
+    annotation = json.loads(annotation_json)
+
+    if annotation["type"] == "api_call":
+        def wrapper(*args, **kwargs):
+            response = requests.request(annotation["method"], annotation["url"], *args, **kwargs)
+            response.raise_for_status()
+            return func(response.json(), *args, **kwargs)
+        return wrapper
+    return func
+
+annotation_json = """
+{
+  "type": "api_call",
+  "url": "http://127.0.0.1:8000/sum/{a}/{b}",
+  "method": "GET"
+}
+"""
+
+@apply_annotations(annotation_json=annotation_json)
+def perform_log_calculations(api_response: dict, a: int, b: int):
+    sum_result = api_response["result"]
+    square_root = math.log10(sum_result)
+    # ... perform further calculations ... 
+    return square_root
+
+if __name__ == "__main__":
+    uvicorn.run(app, host="127.0.0.1", port=8000, log_level="info") 
