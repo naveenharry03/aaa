@@ -199,3 +199,96 @@ def perform_log_calculations(api_response: dict, a: int, b: int):
 
 if __name__ == "__main__":
     uvicorn.run(app, host="127.0.0.1", port=8000, log_level="info") 
+
+
+
+
+
+
+````````````````
+
+def get_functions_and_classes(self, code_content, file_path):
+        """
+        Retrieves all functions, classes, and their decorators.
+        """
+        tree = ast.parse(code_content)
+        custom_decorators = {}
+        for node in ast.walk(tree):
+            if isinstance(node, ast.FunctionDef):
+                if node.name not in ['staticmethod', 'classmethod']:  # Exclude built-ins
+                    custom_decorators[node.name] = node  # Store the function definition
+
+            
+        functions_and_classes = []
+        for node in ast.walk(tree):
+            if isinstance(node, (ast.FunctionDef, ast.ClassDef, ast.AsyncFunctionDef)):
+                start_line = node.lineno
+                end_line = self.get_end_lineno(node)
+                parameters = [arg.arg for arg in node.args.args] if 'args' in dir(node) else []
+                annotations = []
+                decorator_references = []
+
+                # Add decorator references ONLY IF the decorator is used 
+                for decorator in node.decorator_list:
+                    # Check for both ast.Name and ast.Call nodes
+                    if (isinstance(decorator, ast.Name) and decorator.id in custom_decorators) or \
+                       (isinstance(decorator, ast.Call) and isinstance(decorator.func, ast.Name) and decorator.func.id in custom_decorators):
+                        
+                        decorator_name = decorator.func.id if isinstance(decorator, ast.Call) else decorator.id
+                        decorator_body = ''
+                        start_line = custom_decorators[decorator.func.id if isinstance(decorator, ast.Call) else decorator.id].lineno
+                        end_line = self.get_end_lineno(
+                            custom_decorators[decorator.func.id if isinstance(decorator, ast.Call) else decorator.id]
+                        )
+                        for line in code_content.splitlines()[start_line - 1:end_line]:
+                            decorator_body += line + '\n'
+
+                        annotations.append({
+                            'decorator_name': decorator_name,
+                            'decorator_definition': custom_decorators[decorator.func.id if isinstance(decorator, ast.Call) else decorator.id],
+                            'function_or_class': node.name,
+                            'file_path': file_path,
+                            'arguments': [arg.arg for arg in custom_decorators[decorator.func.id if isinstance(decorator, ast.Call) else decorator.id].args.args],
+                            'start_line': custom_decorators[decorator.func.id if isinstance(decorator, ast.Call) else decorator.id].lineno,
+                            'body': decorator_body
+                        })
+
+                # Extract only the values from 'kwargs'
+                for decorator in node.decorator_list:
+                    annotation_type = None
+                    annotation_data = []
+
+                    if isinstance(decorator, ast.Call):
+                        if isinstance(decorator.func, ast.Name):
+                            annotation_type = decorator.func.id
+                        elif isinstance(decorator.func, ast.Attribute):
+                            annotation_type = decorator.func.attr
+
+                        if decorator.args:
+                            for arg in decorator.args:
+                                # Extract only the value from the keyword argument
+                                if isinstance(arg, ast.Constant):
+                                    annotation_data.append(arg.value)
+                                elif isinstance(arg, ast.Str):
+                                    annotation_data.append(arg.s)
+                        if decorator.keywords:
+                            for kwarg in decorator.keywords:
+                                # Extract only the value from the keyword argument
+                                if isinstance(kwarg.value, ast.Constant):
+                                    annotation_data.append(kwarg.value.value)
+                                elif isinstance(kwarg.value, ast.Str):
+                                    annotation_data.append(kwarg.value.s)
+
+                    elif isinstance(decorator, ast.Name):
+                        annotation_type = decorator.id
+
+                    annotations.append({
+                        'type': annotation_type,
+                        'data': annotation_data
+                    })
+
+                functions_and_classes.append(
+                    (type(node).__name__, node.name, start_line, end_line, parameters, annotations)
+                )
+
+        return functions_and_classes
