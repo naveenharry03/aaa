@@ -343,3 +343,12 @@ if setting.use_annotations:
             prompt_data["annotations"] = annotations
         else:
             prompt_data.pop("annotations", None)
+
+for annotation_dict in code_info["annotations"]:
+                if 'type' in annotation_dict:  # Check for 'type' first
+                    decorator_name = annotation_dict['type']
+                    if 'decorator arguments' in annotation_dict:
+                        decorator_arguments = annotation_dict['decorator arguments']
+                    if 'body' in annotation_dict:  # Access decorator body
+                        decorator_body = annotation_dict['body']
+                    break  # Stop after finding the first matching annotation
