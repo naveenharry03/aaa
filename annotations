@@ -289,3 +289,10 @@ def get_functions_and_classes(self, code_content, file_path):
 
             return functions_and_classes
         else:
+
+
+**Instructions for Annotations:**
+
+- **Identify Decorators:** Analyze the code for decorators (lines starting with `@`) and describe them in the documentation.
+- **Decorator Information:** Include the decorator's name, any arguments it takes, and its purpose. 
+- **No Decorators:** If no decorators are present, mark this as "None".
