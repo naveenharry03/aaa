@@ -296,3 +296,27 @@ def get_functions_and_classes(self, code_content, file_path):
 - **Identify Decorators:** Analyze the code for decorators (lines starting with `@`) and describe them in the documentation.
 - **Decorator Information:** Include the decorator's name, any arguments it takes, and its purpose. 
 - **No Decorators:** If no decorators are present, mark this as "None".
+
+
+if setting.use_annotations:
+            # Format the annotations for the prompt
+            formatted_annotations = [
+                f"Annotation {i+1}:\n"
+                f"Decorator Name: {annotation.get('decorator_name', 'None')}\n"
+                f"Function or Class: {annotation.get('function_or_class', 'None')}\n"
+                f"Function Parameters: {', '.join(annotation.get('function parameters', []))}\n"
+                f"Start Line: {annotation.get('start_line', 'None')}\n"
+                f"Body: {annotation.get('body', 'None')}\n"
+                for i, annotation in enumerate(annotations)
+            ]
+            prompt_data["annotations"] = "\n".join(formatted_annotations)
+        else:
+            prompt_data["annotations"] = ""
+
+{"Annotations**: {annotations}" if setting.use_annotations else ""} 
+
+**Annotation Explanation:**
+
+- Based on the provided annotations, please give a concise and informative summary of the decorators and how they impact the function's behavior.
+- If there are multiple annotations, discuss their combined effect on the function.
+- If no annotations are present, simply state "No annotations found".
