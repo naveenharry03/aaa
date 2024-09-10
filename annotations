@@ -320,3 +320,26 @@ if setting.use_annotations:
 - Based on the provided annotations, please give a concise and informative summary of the decorators and how they impact the function's behavior.
 - If there are multiple annotations, discuss their combined effect on the function.
 - If no annotations are present, simply state "No annotations found".
+
+
+  annotations = []
+            for annotation in func["annotations"]:
+                annotation_data = {
+                    "type": annotation["type"],
+                }
+                if "decorator arguments" in annotation:
+                    annotation_data["decorator arguments"] = annotation["decorator arguments"]
+                if "decorator_name" in annotation:
+                    annotation_data["decorator name"] = annotation["decorator_name"]
+                if "function_or_class" in annotation:
+                    annotation_data["function_or_class"] = annotation["function_or_class"]
+                if "function parameters" in annotation:
+                    annotation_data["function parameters"] = annotation["function parameters"]
+                if "start_line" in annotation:
+                    annotation_data["start_line"] = annotation["start_line"]
+                if "body" in annotation:
+                    annotation_data["body"] = annotation["body"]
+                annotations.append(annotation_data)
+            prompt_data["annotations"] = annotations
+        else:
+            prompt_data.pop("annotations", None)
