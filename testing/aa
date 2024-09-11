@@ -1,1 +1,88 @@
+from fastapi import FastAPI
+from calculator import Calculator
+import uvicorn
+import asyncio
+import requests
+import math
+import json
+from flask import Flask , Jsonify
 
+# GLOBAL VARIABLE
+GLOBAL_CONFIG = {
+    "api_version": "1.0.0",
+    "default_currency": "USD"
+}
+
+app = FastAPI()
+app1 = Flask(__name__)
+
+@app.get("/sum/{a}/{b}")
+def calculate_sum(a: int, b: int):
+    """Calculates the sum of two numbers."""
+    calc = Calculator()
+    return {"result": calc.sum(a, b), "api_version": GLOBAL_CONFIG["api_version"]}
+
+@app.get("/difference/{a}/{b}")
+def calculate_difference(a: int, b: int):
+    """Calculates the difference of two numbers."""
+    calc = Calculator()
+    return {"result": calc.difference(a, b)}
+
+@app.get("/multiply/{a}/{b}")
+async def calculate_multiply(a: int, b: int):
+    """Calculates the product of two numbers asynchronously."""
+    calc = Calculator()
+    return {"result": await calc.async_multiply(a, b)}
+
+@app.get("/double/{value}")
+def calculate_double(value: int):
+    """Doubles the given value."""
+    calc = Calculator()
+    return {"result": calc.double(value)}
+
+@app.get("/")
+async def root():  
+    return {"message": "Welcome to the calculator API!", "api_version": GLOBAL_CONFIG["api_version"]}
+
+
+# annotations using Function Wrapper
+
+def sum_api(func):
+    def wrapper(a: int, b: int, *args, **kwargs):
+        response = requests.get(f"http://127.0.0.1:8000/sum/{a}/{b}")
+        response.raise_for_status()
+        sum_result = response.json()["result"]
+        return func(sum_result, a, b, *args, **kwargs)  # Pass the sum to the function
+    return wrapper
+
+@sum_api  # Apply the decorator
+def perform_factorial_calculations(sum_result: int, a: int, b: int):
+    square_root = math.factorial(sum_result)
+    return square_root
+
+
+# annotations using Direct API Call
+
+def api_call(url: str, method: str = "GET"):
+    def decorator(func):
+        def wrapper(*args, **kwargs):
+            response = requests.request(method, url, *args, **kwargs)
+            response.raise_for_status()
+            return func(response.json(), *args, **kwargs)
+        return wrapper
+    return decorator
+
+@api_call(url="http://127.0.0.1:8000/difference/{a}/{b}", method="GET")  # Apply the decorator
+def perform_squareroot_calculations(api_response: dict, a: int, b: int):
+    sum_result = api_response["result"]
+    square_root = math.sqrt(sum_result)
+    # ... perform further calculations ... 
+    return square_root
+
+
+@app1.route('/difference/<int:a>/<int:b>')
+def calculate_difference(a, b):
+    """Calculates the difference of two numbers."""
+    calc = Calculator()
+    result = calc.difference(a, b)
+    return jsonify({"result": result})
