@@ -352,3 +352,112 @@ for annotation_dict in code_info["annotations"]:
                     if 'body' in annotation_dict:  # Access decorator body
                         decorator_body = annotation_dict['body']
                     break  # Stop after finding the first matching annotation
+
+```````````````````````````````````````````````````````````````````````````````````
+
+def get_functions_and_classes(self, code_content):
+        """
+        Retrieves all functions, classes, and their decorators.
+        """
+        if setting.use_annotations:
+            tree = ast.parse(code_content)
+            custom_decorators = {}
+            # Store the framework instance creation for later use
+            framework_instances = {}
+            for node in ast.walk(tree):
+                if isinstance(node, ast.FunctionDef):
+                    if node.name not in ['staticmethod', 'classmethod']:  # Exclude built-ins
+                        custom_decorators[node.name] = node  # Store the function definition
+                elif isinstance(node, ast.Assign):
+                    if isinstance(node.targets[0], ast.Name):
+                        variable_name = node.targets[0].id
+                        if isinstance(node.value, ast.Call):
+                            # Dynamic framework detection
+                            if isinstance(node.value.func, ast.Name):
+                                framework_name = node.value.func.id
+                                framework_instances[variable_name] = {
+                                    'instance_type': framework_name,
+                                    'instance_creation_line': node.lineno
+                                }
+
+            functions_and_classes = []
+            for node in ast.walk(tree):
+                if isinstance(node, (ast.FunctionDef, ast.ClassDef, ast.AsyncFunctionDef)):
+                    start_line = node.lineno
+                    end_line = self.get_end_lineno(node)
+                    parameters = [arg.arg for arg in node.args.args] if 'args' in dir(node) else []
+                    annotations = []
+
+                    for decorator in node.decorator_list:
+                        decorator_string = ""
+
+                        # Construct the full decorator string
+                        if isinstance(decorator, ast.Call):
+                            if isinstance(decorator.func, ast.Name):
+                                decorator_string += f"@{decorator.func.id}"
+                                decorator_string += "("
+                                if decorator.keywords:
+                                    for kwarg in decorator.keywords:
+                                        decorator_string += f", {kwarg.arg}={kwarg.value.value if isinstance(kwarg.value, ast.Constant) else kwarg.value.s}"
+                                decorator_string += ")"
+
+                            elif isinstance(decorator.func, ast.Attribute):
+                                decorator_string += f"@{decorator.func.value.id}.{decorator.func.attr}"
+
+                                # Get framework instance information from the attribute
+                                framework_name = decorator.func.value.id  # Get the name of the object (e.g., 'app')
+                                if framework_name in framework_instances:
+                                    # Extract full decorator string
+                                    decorator_string += "("
+                                    if decorator.args:
+                                        decorator_string += ", ".join(
+                                            [str(arg.value) if isinstance(arg, ast.Constant) else arg.s for arg in decorator.args]
+                                        )
+                                    if decorator.keywords:
+                                        for kwarg in decorator.keywords:
+                                            decorator_string += f", {kwarg.arg}={kwarg.value.value if isinstance(kwarg.value, ast.Constant) else kwarg.value.s}"
+                                    decorator_string += ")"
+
+                                    annotations.append({
+                                        "type": "decorator",
+                                        "decorator arguments": [decorator_string],
+                                        "instance_creation_line": framework_instances[framework_name]['instance_creation_line'],
+                                        "for_object": framework_instances[framework_name]['instance_type'],
+                                    })
+                                    break # Break after finding the framework-related decorator
+
+                        # **Handle arguments for custom decorators**
+                        elif isinstance(decorator, ast.Call):
+                            # Extract the complete decorator string, including arguments
+                            decorator_string = ast.unparse(decorator)
+
+                        elif isinstance(decorator, ast.Name):
+                            decorator_string += f"@{decorator.id}"
+
+                        if decorator_string:  # Only add if decorator_string is not empty
+                            # For custom decorators (not framework-related)
+                            annotations.append({
+                                "type": "custom decorator",
+                                "decorator arguments": [decorator_string]
+                            })
+
+                    functions_and_classes.append(
+                        (type(node).__name__, node.name, start_line, end_line, parameters, annotations)
+                    )
+
+            return functions_and_classes
+        else:
+            # Use the old logic 
+            tree = ast.parse(code_content)
+            self.add_parent_references(tree)
+            functions_and_classes = []
+            for node in ast.walk(tree):
+                if isinstance(node, (ast.FunctionDef, ast.ClassDef, ast.AsyncFunctionDef)):
+                    start_line = node.lineno
+                    end_line = self.get_end_lineno(node)
+                    parameters = [arg.arg for arg in node.args.args] if 'args' in dir(node) else []
+                    all_names = [item[1] for item in functions_and_classes]
+                    functions_and_classes.append(
+                        (type(node).__name__, node.name, start_line, end_line, parameters)
+                    )
+            return functions_and_classes
