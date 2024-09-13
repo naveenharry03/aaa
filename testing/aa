@@ -1,3 +1,6 @@
+We've designed this guide to be a clear and concise reference, ensuring a smooth workflow and maximizing the project's efficiency. By following these steps, you'll gain a thorough understanding of the project's process, enabling you to confidently navigate its various stages and achieve the optimal results. We're confident that this guide will empower you to utilize the project's full potential and achieve your desired outcomes.
+
+
 from fastapi import FastAPI
 from calculator import Calculator
 import uvicorn
