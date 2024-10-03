@@ -130,11 +130,19 @@ python -m unittest discover -s tests
 
 
 
-The config.py file is responsible for managing configuration settings and interactions with Azure services. It includes functions to:
+The llm folder contains scripts that manage interactions with language models (LLMs) for generating documentation and other text-based outputs. It includes functionalities for constructing prompts, handling API requests, and managing responses from LLMs.
 
-Parse Command-Line Arguments: Extract key-value pairs from command-line arguments.
-Load Configuration: Load environment-specific configuration settings from a YAML file and set them as environment variables.
-Retrieve Configuration: Fetch configuration parameters, optionally from Azure Key Vault if not found in environment variables.
-Set OpenAI Key: Ensure the OpenAI API key is set in the environment variables.
-Upload to Azure Blob Storage: Upload files to Azure Blob Storage using specified credentials and settings.
-Overall, this file centralizes the configuration management and Azure service interactions for the application.
+Summary of chat_engine.py
+Purpose: Manages the process of generating documentation using language models.
+Key Functionalities:
+Initializes with project settings and manages LLM clients.
+Counts tokens in text strings to manage input length.
+Reduces input length by modifying prompt data.
+Generates responses from LLMs with retry mechanisms for handling errors.
+Constructs detailed prompts for generating documentation, including project structure and references.
+Summary of prompt.py
+Purpose: Defines the system and user prompts used for generating documentation.
+Key Functionalities:
+Provides a template for system prompts that includes project structure, code content, and reference information.
+Defines user prompts to guide the generation of documentation in a professional and deterministic tone.
+Ensures the generated documentation is precise and avoids speculation.
