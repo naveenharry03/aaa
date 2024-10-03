@@ -130,20 +130,11 @@ python -m unittest discover -s tests
 
 
 
-Purpose: This file defines the SwaggerJSON class, which is responsible for generating documentation from OpenAPI JSON files.
-Key Functions:
-prepare_task_list(api_json): Prepares a list of tasks for each API endpoint by extracting relevant details from the OpenAPI JSON.
-generate_docs(task): Generates documentation for a given task using a language model.
-save_markdown(task, doc): Saves the generated documentation as a Markdown file.
-is_url(path): Checks if a given path is a URL.
-run(path): Main function that processes the OpenAPI JSON file or URL, generates documentation for each endpoint, and saves it.
-utils.py
-Purpose: Provides utility functions to support the main documentation generation process.
-Key Function:
-create_folders(setting, UPLOAD_FOLDER): Creates necessary folders for storing the generated documentation and updates the settings with the paths.
-doc.py
-Purpose: Defines the specifications for API parameters and responses.
-Key Variables:
-specs_dict: Contains the parameters and responses for file upload and mode selection.
-config_specs: Contains the parameters and responses for configuration settings, such as mode, base URL, model, API key, and other related settings.
-Together, these files form a comprehensive tool for generating API documentation, supporting both code and OpenAPI JSON inputs, and providing a web interface for file uploads and configuration.
+The config.py file is responsible for managing configuration settings and interactions with Azure services. It includes functions to:
+
+Parse Command-Line Arguments: Extract key-value pairs from command-line arguments.
+Load Configuration: Load environment-specific configuration settings from a YAML file and set them as environment variables.
+Retrieve Configuration: Fetch configuration parameters, optionally from Azure Key Vault if not found in environment variables.
+Set OpenAI Key: Ensure the OpenAI API key is set in the environment variables.
+Upload to Azure Blob Storage: Upload files to Azure Blob Storage using specified credentials and settings.
+Overall, this file centralizes the configuration management and Azure service interactions for the application.
