@@ -127,3 +127,39 @@ You can run the tests using the following command:
 
 ```bash
 python -m unittest discover -s tests
+
+
+
+The main.py file is the entry point for a documentation generation tool named "CODE ANALYZER". It uses the argparse library to parse command-line arguments, which specify the input source (either an OpenAPI JSON file or source code directory), the output directory, and the operating mode (either 'CODE' or 'API'). The file imports various modules and functions to load configurations, prepare settings, and set the logger level. Depending on the mode specified, it either runs a code analysis using the Runner class or processes an OpenAPI JSON file using the SwaggerJSON class. The valid_directory function ensures that the provided output directory is valid. The main function orchestrates the argument parsing, settings preparation, and execution of the appropriate runner based on the mode.
+
+The api.py file sets up a Flask web application to provide an API for generating documentation from either source code or OpenAPI JSON files. It imports necessary modules and configurations, including load_config to load settings and prepare_settings to prepare the environment. The application allows file uploads to a temporary directory (temp_files) and supports both ZIP and JSON file formats.
+
+The main functionalities include:
+
+File Upload Handling: The upload_file route handles POST requests for file uploads. It checks the file type and mode (either 'CODE' or 'API') specified in the form data.
+Code Documentation Generation: If the mode is 'CODE' and the uploaded file is a ZIP file, it unzips the file and triggers the Runner class to generate code documentation.
+API Documentation Generation: If the mode is 'API' and the uploaded file is a JSON file, it processes the file using the SwaggerJSON class to generate API documentation.
+Utility Functions: Functions like allowed_file and unzipfile help in validating file types and extracting ZIP files, respectively.
+The application uses flasgger for Swagger documentation and runs on port 5000. The handle_code and handle_openapi functions manage the respective documentation generation processes, providing responses to the client and running the appropriate tasks asynchronously.
+
+
+The code_analyzer_dev.yaml file is a configuration file for the "CODE ANALYZER" tool. It specifies various settings and parameters required for the tool to function correctly. Key configurations include:
+
+Hierarchy Path: hierarchy_path is set to .project_doc_record, indicating where the project documentation records are stored.
+Markdown Docs Path: markdown_docs_path is set to markdown_docs, specifying the directory where markdown documentation will be saved.
+LLM Provider: LLM-PROVIDER is set to AZUREAI, indicating that Azure AI is the chosen provider for language model services.
+Mode: mode is set to CODE, specifying that the tool should operate in code analysis mode.
+OpenAI Configuration: Under the OPENAI section, it includes the base URL, model name, and API key for accessing OpenAI services.
+Azure AI Configuration: Under the AZUREAI section, it includes the base URL, model name, API key, API version, and deployment name for accessing Azure AI services.
+Dockerfile
+The Dockerfile is used to create a Docker image for the "CODE ANALYZER" tool. It defines the environment and dependencies required to run the application. Key steps include:
+
+Base Image: FROM naveen.com:8084/python:3.11 specifies the base image, which is a custom Python 3.11 image hosted at naveen.com.
+Working Directory: WORKDIR /app sets the working directory inside the container to /app.
+Copy Requirements: COPY requirements.txt . copies the requirements.txt file to the working directory.
+Copy Application: COPY . /app copies the entire application code to the working directory.
+Upgrade Pip: RUN pip install --upgrade pip upgrades pip to the latest version.
+Install Dependencies: RUN pip install --no-cache-dir -r requirements.txt installs the Python dependencies listed in requirements.txt.
+Environment Variable: ENV ENV = dev sets an environment variable ENV to dev.
+Expose Port: EXPOSE 5000 exposes port 5000, which is the port the Flask application will run on.
+Start Application: CMD [ "Python","api.py" ] specifies the command to run the Flask application by executing api.py.
