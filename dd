@@ -130,27 +130,37 @@ python -m unittest discover -s tests
 
 
 
-Introduction to the helpers Folder
-The helpers folder contains utility scripts that provide essential support functions for the main application. These scripts handle logging, configuration management, and define constants used throughout the project.
+Introduction to the code_base Folder
+The code_base folder contains the core logic for managing and processing the project's codebase. It includes functionalities for handling project metadata, managing files, and running the main documentation generation process.
 
-Summary of settings.py
-Purpose: Manages configuration settings and interactions with Azure services.
+Introduction to the metadata Folder
+The metadata folder contains scripts that manage the metadata associated with the project's codebase. This includes handling project structure, file operations, and documentation items.
+
+Summary of project_manager.py
+Purpose: Manages the project's structure and hierarchy.
 Key Functionalities:
-Parses command-line arguments and loads environment-specific configuration settings.
-Retrieves configuration parameters, optionally from Azure Key Vault.
-Sets OpenAI API key and uploads files to Azure Blob Storage.
-Summary of merge_md_to_doc.py
-Purpose: Converts Markdown files to a single Microsoft Word document.
+Initializes with the repository path and project hierarchy.
+Retrieves the project structure by recursively walking through the directory tree.
+Builds a path tree for references and converts it to a string representation.
+Summary of file_handler.py
+Purpose: Handles file operations and metadata extraction.
 Key Functionalities:
-Scans a directory for Markdown files.
-Converts found Markdown files to a Word document using pypandoc.
-Summary of log.py
-Purpose: Manages logging configuration and log message handling.
+Checks files and folders in the repository.
+Reads and writes file content.
+Adds parent references to AST nodes.
+Retrieves code information and generates file structure.
+Converts project hierarchy to Markdown files.
+Summary of doc_meta_info.py
+Purpose: Manages documentation metadata and relationships.
 Key Functionalities:
-Defines a custom logging handler to intercept and log messages.
-Sets the logging level and configures log output to both console and file.
-Summary of constants.py
-Purpose: Defines constants and enumerations used throughout the project.
+Defines enums for edge types, item types, and item statuses.
+Determines if documentation needs to be generated.
+Manages documentation items and their relationships.
+Finds references and generates metadata for documentation.
+Summary of runner.py
+Purpose: Runs the main documentation generation process.
 Key Functionalities:
-Provides enumerations for LLM providers, operating modes, log levels, edge types, document item types, and document item statuses.
-Includes utility methods for converting enumeration values to strings.
+Initializes project manager and chat engine.
+Generates documentation for individual items.
+Refreshes Markdown files and updates project hierarchy.
+Runs the document update process and generates overall project documentation.
