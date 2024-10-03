@@ -130,19 +130,27 @@ python -m unittest discover -s tests
 
 
 
-The llm folder contains scripts that manage interactions with language models (LLMs) for generating documentation and other text-based outputs. It includes functionalities for constructing prompts, handling API requests, and managing responses from LLMs.
+Introduction to the helpers Folder
+The helpers folder contains utility scripts that provide essential support functions for the main application. These scripts handle logging, configuration management, and define constants used throughout the project.
 
-Summary of chat_engine.py
-Purpose: Manages the process of generating documentation using language models.
+Summary of settings.py
+Purpose: Manages configuration settings and interactions with Azure services.
 Key Functionalities:
-Initializes with project settings and manages LLM clients.
-Counts tokens in text strings to manage input length.
-Reduces input length by modifying prompt data.
-Generates responses from LLMs with retry mechanisms for handling errors.
-Constructs detailed prompts for generating documentation, including project structure and references.
-Summary of prompt.py
-Purpose: Defines the system and user prompts used for generating documentation.
+Parses command-line arguments and loads environment-specific configuration settings.
+Retrieves configuration parameters, optionally from Azure Key Vault.
+Sets OpenAI API key and uploads files to Azure Blob Storage.
+Summary of merge_md_to_doc.py
+Purpose: Converts Markdown files to a single Microsoft Word document.
 Key Functionalities:
-Provides a template for system prompts that includes project structure, code content, and reference information.
-Defines user prompts to guide the generation of documentation in a professional and deterministic tone.
-Ensures the generated documentation is precise and avoids speculation.
+Scans a directory for Markdown files.
+Converts found Markdown files to a Word document using pypandoc.
+Summary of log.py
+Purpose: Manages logging configuration and log message handling.
+Key Functionalities:
+Defines a custom logging handler to intercept and log messages.
+Sets the logging level and configures log output to both console and file.
+Summary of constants.py
+Purpose: Defines constants and enumerations used throughout the project.
+Key Functionalities:
+Provides enumerations for LLM providers, operating modes, log levels, edge types, document item types, and document item statuses.
+Includes utility methods for converting enumeration values to strings.
