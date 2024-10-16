@@ -1,17 +1,16 @@
 import os
-from markdown import markdown
 from docx import Document
 from docx.shared import Pt
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.oxml.ns import qn
 from docx.oxml import OxmlElement
-import pypandoc
+from markdown import markdown
 
-# Set the folder path for temp markdown files
+# Path to the folder with markdown files
 TEMP_MD_PATH = r"C:\Users\naveen.jagadeesan\Desktop\Naveen_repoagent\temp_files"
 
 def get_all_md_files(path):
-    """Retrieve all markdown files from the given path."""
+    """Retrieve all markdown files from the specified path."""
     md_files = []
     for root, _, files in os.walk(path):
         for file in files:
@@ -19,14 +18,8 @@ def get_all_md_files(path):
                 md_files.append(os.path.join(root, file))
     return md_files
 
-def merge_markdown_to_docx(md_files, output_file):
-    """Convert markdown files to a merged DOCX file."""
-    # Convert markdown files to a single DOCX
-    pypandoc.convert_file(md_files, 'docx', outputfile=output_file)
-    print(f"Merged DOCX created at: {output_file}")
-
 def add_cover_page_and_toc(doc, title, author):
-    """Add a cover page and TOC to the given DOCX document."""
+    """Add a cover page and Table of Contents (TOC) to the document."""
     # --- Cover Page ---
     title_paragraph = doc.add_paragraph()
     title_run = title_paragraph.add_run(title)
@@ -34,7 +27,7 @@ def add_cover_page_and_toc(doc, title, author):
     title_run.font.size = Pt(28)
     title_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
 
-    # Add space and author
+    # Add space and author information
     doc.add_paragraph().add_run("\n")
     author_paragraph = doc.add_paragraph()
     author_run = author_paragraph.add_run(f"Author: {author}")
@@ -45,40 +38,51 @@ def add_cover_page_and_toc(doc, title, author):
     doc.add_page_break()
 
     # --- TOC ---
-    paragraph = doc.add_paragraph()
-    run = paragraph.add_run("Table of Contents")
-    run.bold = True
-    run.font.size = Pt(20)
-    paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    toc_paragraph = doc.add_paragraph()
+    toc_run = toc_paragraph.add_run("Table of Contents")
+    toc_run.bold = True
+    toc_run.font.size = Pt(20)
+    toc_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
 
     # Add TOC field
-    toc_paragraph = doc.add_paragraph()
+    toc_field_paragraph = doc.add_paragraph()
     fld_simple = OxmlElement('w:fldSimple')
     fld_simple.set(qn('w:instr'), 'TOC \\o "1-3" \\h \\z \\u')
-    toc_paragraph._element.append(fld_simple)
+    toc_field_paragraph._element.append(fld_simple)
 
     # Page break after TOC
     doc.add_page_break()
 
-def generate_docs(folder):
-    """Main function to generate the DOCX with cover and TOC."""
-    output_file = os.path.join(folder, "final_output.docx")
-    md_files = get_all_md_files(folder)
+def add_markdown_content(doc, md_files):
+    """Parse and add content from markdown files to the DOCX document."""
+    for md_file in md_files:
+        with open(md_file, 'r', encoding='utf-8') as f:
+            md_content = f.read()
+            html_content = markdown(md_content)  # Convert markdown to HTML
 
+            # Add HTML content to the DOCX as plain text (you can enhance this part further)
+            doc.add_paragraph(html_content)
+
+def generate_docs(folder):
+    """Generate the DOCX with cover page, TOC, and markdown content."""
+    # Create a new DOCX document
+    doc = Document()
+
+    # Add cover page and TOC
+    add_cover_page_and_toc(doc, "My Project Documentation", "Naveen Jagadeesan")
+
+    # Get all markdown files and add their content to the DOCX
+    md_files = get_all_md_files(folder)
     if not md_files:
         print("No markdown files found in the specified folder.")
         return
 
-    # Merge markdown files into a single DOCX
-    merge_markdown_to_docx(md_files, output_file)
+    add_markdown_content(doc, md_files)
 
-    # Open the merged DOCX and add cover page and TOC
-    doc = Document(output_file)
-    add_cover_page_and_toc(doc, "My Project Documentation", "Naveen Jagadeesan")
-
-    # Save the final DOCX with cover and TOC
+    # Save the final DOCX
+    output_file = os.path.join(folder, "final_output.docx")
     doc.save(output_file)
-    print(f"Final DOCX with cover page and TOC saved at: {output_file}")
+    print(f"Final DOCX saved at: {output_file}")
 
 # --- Execute the function ---
 if __name__ == "__main__":
