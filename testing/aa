@@ -1,50 +1,50 @@
 import os
+from markdown import markdown
 from docx import Document
-from docx.shared import Pt, RGBColor
+from docx.shared import Pt
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.oxml.ns import qn
 from docx.oxml import OxmlElement
+import pypandoc
 
-def create_document_with_cover_and_toc(merged_docx_path, title, author):
-    # Create a new document object
-    doc = Document()
+# Set the folder path for temp markdown files
+TEMP_MD_PATH = r"C:\Users\naveen.jagadeesan\Desktop\Naveen_repoagent\temp_files"
 
+def get_all_md_files(path):
+    """Retrieve all markdown files from the given path."""
+    md_files = []
+    for root, _, files in os.walk(path):
+        for file in files:
+            if file.endswith(".md"):
+                md_files.append(os.path.join(root, file))
+    return md_files
+
+def merge_markdown_to_docx(md_files, output_file):
+    """Convert markdown files to a merged DOCX file."""
+    # Convert markdown files to a single DOCX
+    pypandoc.convert_file(md_files, 'docx', outputfile=output_file)
+    print(f"Merged DOCX created at: {output_file}")
+
+def add_cover_page_and_toc(doc, title, author):
+    """Add a cover page and TOC to the given DOCX document."""
     # --- Cover Page ---
-    # Add title
     title_paragraph = doc.add_paragraph()
     title_run = title_paragraph.add_run(title)
     title_run.bold = True
     title_run.font.size = Pt(28)
     title_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
 
-    # Add space between title and author
+    # Add space and author
     doc.add_paragraph().add_run("\n")
-
-    # Add author name
     author_paragraph = doc.add_paragraph()
     author_run = author_paragraph.add_run(f"Author: {author}")
     author_run.font.size = Pt(16)
     author_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
 
-    # Add page break after the cover page
+    # Page break after cover page
     doc.add_page_break()
 
-    # --- Table of Contents (TOC) ---
-    add_toc(doc)
-
-    # Add another page break after the TOC
-    doc.add_page_break()
-
-    # --- Merge Markdown Content ---
-    merged_content = Document(merged_docx_path)
-    for element in merged_content.element.body:
-        doc.element.body.append(element)
-
-    # Save the final document
-    doc.save(merged_docx_path)
-
-def add_toc(doc):
-    """Adds a Table of Contents (TOC) to the document."""
+    # --- TOC ---
     paragraph = doc.add_paragraph()
     run = paragraph.add_run("Table of Contents")
     run.bold = True
@@ -52,16 +52,34 @@ def add_toc(doc):
     paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
 
     # Add TOC field
-    p = doc.add_paragraph()
+    toc_paragraph = doc.add_paragraph()
     fld_simple = OxmlElement('w:fldSimple')
     fld_simple.set(qn('w:instr'), 'TOC \\o "1-3" \\h \\z \\u')
-    p._element.append(fld_simple)
+    toc_paragraph._element.append(fld_simple)
 
-# --- Usage ---
-# Provide the path to your merged docx file
-merged_docx_path = "merged_output.docx"
-title = "My Project Documentation"
-author = "John Doe"
+    # Page break after TOC
+    doc.add_page_break()
 
-# Create the document with cover page and TOC
-create_document_with_cover_and_toc(merged_docx_path, title, author)
+def generate_docs(folder):
+    """Main function to generate the DOCX with cover and TOC."""
+    output_file = os.path.join(folder, "final_output.docx")
+    md_files = get_all_md_files(folder)
+
+    if not md_files:
+        print("No markdown files found in the specified folder.")
+        return
+
+    # Merge markdown files into a single DOCX
+    merge_markdown_to_docx(md_files, output_file)
+
+    # Open the merged DOCX and add cover page and TOC
+    doc = Document(output_file)
+    add_cover_page_and_toc(doc, "My Project Documentation", "Naveen Jagadeesan")
+
+    # Save the final DOCX with cover and TOC
+    doc.save(output_file)
+    print(f"Final DOCX with cover page and TOC saved at: {output_file}")
+
+# --- Execute the function ---
+if __name__ == "__main__":
+    generate_docs(TEMP_MD_PATH)
