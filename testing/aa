@@ -1,13 +1,17 @@
 import os
+import datetime
+import win32com.client as win32
+import io
 from docx import Document
-from docx.shared import Pt
-from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx.shared import Pt, Inches
+from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_PARAGRAPH_ALIGNMENT
 from docx.oxml.ns import qn
 from docx.oxml import OxmlElement
 import pypandoc
 
 # Set the path for the markdown files
 TEMP_MD_PATH = r"C:\Users\naveen.jagadeesan\Desktop\Naveen_repoagent\temp_files"
+image_path = r"C:\Users\naveen.jagadeesan\Desktop\Naveen_repoagent\temp_files\images"
 
 def get_all_md_files(path):
     """Retrieve all markdown files from the given path."""
@@ -18,152 +22,58 @@ def get_all_md_files(path):
                 md_files.append(os.path.join(root, file))
     return md_files
 
+def set_page_borders(doc):
+    """Set thick black border for all pages."""
+    sections = doc.sections
+    for section in sections:
+        sectPr = section._sectPr
+        pgBorders = OxmlElement('w:pgBorders')
+
+        for border_name in ['top', 'left', 'bottom', 'right']:
+            border = OxmlElement(f'w:{border_name}')
+            border.set(qn('w:val'), 'single')
+            border.set(qn('w:sz'), '12')  # 6pt thickness
+            border.set(qn('w:space'), '24')
+            border.set(qn('w:color'), '000000')
+            pgBorders.append(border)
+
+        sectPr.append(pgBorders)
+
 def add_cover_page_and_toc(doc, title, author):
     """Add a cover page and Table of Contents (TOC) at the start of the document."""
-    # --- Cover Page ---
+    if image_path:
+        doc.add_picture(image_path, width=Inches(5), height=Inches(5))
+        last_paragraph = doc.paragraphs[-1]
+        last_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+
+    doc.add_paragraph("\n")
+
     title_paragraph = doc.add_paragraph()
     title_run = title_paragraph.add_run(title)
     title_run.bold = True
-    title_run.font.size = Pt(28)
+    title_run.font.size = Pt(30)
     title_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
 
-    # Add space and author information
-    doc.add_paragraph().add_run("\n")
+    doc.add_paragraph("\n")
     author_paragraph = doc.add_paragraph()
     author_run = author_paragraph.add_run(f"Author: {author}")
     author_run.font.size = Pt(16)
     author_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
 
-    # Page break after cover page
     doc.add_page_break()
 
-    # --- TOC ---
     toc_paragraph = doc.add_paragraph()
     toc_run = toc_paragraph.add_run("Table of Contents")
     toc_run.bold = True
     toc_run.font.size = Pt(20)
     toc_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
 
-    # Add TOC field
     toc_field_paragraph = doc.add_paragraph()
     fld_simple = OxmlElement('w:fldSimple')
     fld_simple.set(qn('w:instr'), 'TOC \\o "1-3" \\h \\z \\u')
     toc_field_paragraph._element.append(fld_simple)
 
-    # Page break after TOC
     doc.add_page_break()
-
-def merge_markdown_to_docx(md_files, output_file):
-    """Convert markdown files to a merged DOCX using pypandoc."""
-    pypandoc.convert_file(md_files, 'docx', outputfile=output_file)
-    print(f"Merged DOCX created at: {output_file}")
-
-def append_existing_content(target_doc, source_docx_path):
-    """Append content from an existing DOCX to another DOCX."""
-    src_doc = Document(source_docx_path)
-    for element in src_doc.element.body:
-        target_doc.element.body.append(element)
-
-def generate_docs(folder):
-    """Main function to generate the final DOCX with cover page, TOC, and content."""
-    md_files = get_all_md_files(folder)
-    if not md_files:
-        print("No markdown files found in the specified folder.")
-        return
-
-    # Temporary DOCX path for the merged markdown content
-    temp_docx_path = os.path.join(folder, "merged_content.docx")
-
-    # Merge markdown files into a temporary DOCX using pypandoc
-    merge_markdown_to_docx(md_files, temp_docx_path)
-
-    # Create a new document with cover page and TOC
-    final_doc = Document()
-    add_cover_page_and_toc(final_doc, "My Project Documentation", "Naveen Jagadeesan")
-
-    # Append the merged markdown content to the final document
-    append_existing_content(final_doc, temp_docx_path)
-
-    # Save the final DOCX
-    final_output_path = os.path.join(folder, "final_output.docx")
-    final_doc.save(final_output_path)
-
-    print(f"Final DOCX with cover page and TOC saved at: {final_output_path}")
-
-# --- Execute the function ---
-if __name__ == "__main__":
-    generate_docs(TEMP_MD_PATH)
-
-
-from docx import Document
-from docx.oxml import OxmlElement
-from docx.oxml.ns import qn
-
-def set_page_borders(doc):
-    """Set thick black border for all pages."""
-    sections = doc.sections
-    for section in sections:
-        # Get the page borders element from the section's properties
-        sectPr = section._sectPr  # section properties
-        pgBorders = OxmlElement('w:pgBorders')
-
-        # Add attributes for the border
-        for border_name in ['top', 'left', 'bottom', 'right']:
-            border = OxmlElement(f'w:{border_name}')
-            border.set(qn('w:val'), 'single')  # Border style: 'single' is a solid line
-            border.set(qn('w:sz'), '12')  # Border size: 12 represents 6pt thickness
-            border.set(qn('w:space'), '24')  # Space between text and border
-            border.set(qn('w:color'), '000000')  # Border color: black
-            
-            pgBorders.append(border)
-
-        # Add the borders to the section properties
-        sectPr.append(pgBorders)
-
-# Example usage
-doc = Document()
-
-# Add cover page with title, authors, and date
-add_cover_page_and_toc(doc, "My Project Documentation", ["Author 1", "Author 2"])
-
-# Add borders to all pages (including cover page)
-set_page_borders(doc)
-
-# Save the document
-doc.save("final_output_with_borders.docx")
-
-
-# Helper functions
-def set_font_style(run, font_name="Arial", font_size=12, bold=False, italic=False):
-    """Set font style, size, boldness, and italicization for a run."""
-    run.font.name = font_name
-    run.font.size = Pt(font_size)
-    run.bold = bold
-    run.italic = italic
-
-def set_paragraph_style(paragraph, alignment=WD_PARAGRAPH_ALIGNMENT.JUSTIFY, spacing_before=6, spacing_after=6, line_spacing=1.5):
-    """Set paragraph alignment, spacing, and line spacing."""
-    paragraph.alignment = alignment
-    paragraph.paragraph_format.space_before = Pt(spacing_before)
-    paragraph.paragraph_format.space_after = Pt(spacing_after)
-    paragraph.paragraph_format.line_spacing = line_spacing
-
-def apply_page_break(paragraph):
-    """Add a page break before a paragraph (for top-level headings)."""
-    paragraph.add_run().add_break(docx.enum.text.WD_BREAK.PAGE)
-
-def add_code_block(doc, code_content):
-    """Handle code snippets with left alignment and different formatting."""
-    code_paragraph = doc.add_paragraph()
-    code_paragraph.alignment = WD_PARAGRAPH_ALIGNMENT.LEFT
-    code_run = code_paragraph.add_run(code_content)
-    code_run.font.name = 'Courier New'  # Monospaced font for code
-    code_run.font.size = Pt(10)         # Smaller font size for code snippets
-    code_run.font.bold = True
-    code_paragraph.paragraph_format.left_indent = Inches(0.5)
-    code_paragraph.paragraph_format.right_indent = Inches(0.5)
-    code_paragraph.paragraph_format.space_before = Pt(12)
-    code_paragraph.paragraph_format.space_after = Pt(12)
 
 def format_markdown_content(doc, markdown_content):
     """Apply formatting to markdown content and convert it to Word document."""
@@ -200,3 +110,66 @@ def format_markdown_content(doc, markdown_content):
             paragraph = doc.add_paragraph(line.strip())
             set_font_style(paragraph.add_run(line.strip()), font_name="Arial", font_size=12)
             set_paragraph_style(paragraph)
+
+def merge_markdown_to_docx(md_files, output_file):
+    """Convert markdown files to a merged DOCX using pypandoc."""
+    markdown_content = ""
+    for md_file in md_files:
+        with open(md_file, 'r', encoding='utf-8') as file:
+            markdown_content += file.read() + "\n\n"  # Add some spacing between files
+
+    # Now format the markdown content before converting
+    doc = Document()
+    format_markdown_content(doc, markdown_content)
+    doc.save(output_file)
+
+    print(f"Merged DOCX created at: {output_file}")
+
+def append_existing_content(target_doc, source_docx_path):
+    """Append content from an existing DOCX to another DOCX."""
+    src_doc = Document(source_docx_path)
+    for element in src_doc.element.body:
+        target_doc.element.body.append(element)
+
+def update_toc(doc_path):
+    word = win32.Dispatch('Word.Application')
+    word.Visible = False
+    doc = word.Documents.Open(doc_path)
+    
+    # Update the Table of Contents
+    doc.fields.Update()
+    
+    doc.Save()
+    doc.Close()
+    word.Quit()
+
+def generate_docs(folder):
+    """Main function to generate the final DOCX with cover page, TOC, and content."""
+    md_files = get_all_md_files(folder)
+    if not md_files:
+        print("No markdown files found in the specified folder.")
+        return
+
+    # Temporary DOCX path for the merged markdown content
+    temp_docx_path = os.path.join(folder, "merged_content.docx")
+
+    # Merge markdown files into a temporary DOCX using pypandoc
+    merge_markdown_to_docx(md_files, temp_docx_path)
+
+    # Create a new document with cover page and TOC
+    final_doc = Document()
+    add_cover_page_and_toc(final_doc, "My Project Documentation", "Naveen Jagadeesan")
+
+    # Append the merged markdown content to the final document
+    append_existing_content(final_doc, temp_docx_path)
+
+    # Save the final DOCX
+    final_output_path = os.path.join(folder, "final_output.docx")
+    final_doc.save(final_output_path)
+    update_toc(final_output_path)
+
+    print(f"Final DOCX with cover page and TOC saved at: {final_output_path}")
+
+# --- Execute the function ---
+if __name__ == "__main__":
+    generate_docs(TEMP_MD_PATH)
