@@ -102,3 +102,26 @@ def generate_docs_with_formatting(folder):
 # --- Execute the function ---
 if __name__ == "__main__":
     generate_docs_with_formatting(TEMP_MD_PATH)
+
+def find_cover_and_toc_end(target_doc):
+    """Dynamically find the index where the cover page and TOC end."""
+    cover_end_index = 0
+    toc_end_index = 0
+    found_toc = False
+
+    # Loop through paragraphs to detect cover and TOC
+    for idx, paragraph in enumerate(target_doc.paragraphs):
+        # Check for cover page: detect title or author paragraph (assume center alignment or large font)
+        if paragraph.alignment == WD_PARAGRAPH_ALIGNMENT.CENTER and paragraph.runs and paragraph.runs[0].font.size == Pt(30):
+            cover_end_index = idx  # Assume this is the end of the cover page
+
+        # Check for TOC: detect the paragraph with TOC (based on specific text or field)
+        if 'Table of Contents' in paragraph.text:
+            found_toc = True
+
+        if found_toc and paragraph.text.strip() == '' and paragraph.alignment == WD_PARAGRAPH_ALIGNMENT.CENTER:
+            toc_end_index = idx  # Assume empty paragraph and alignment indicates the end of TOC
+            break
+    
+    # Return the index after TOC ends
+    return toc_end_index + 1
