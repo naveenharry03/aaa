@@ -93,3 +93,41 @@ def generate_docs(folder):
 # --- Execute the function ---
 if __name__ == "__main__":
     generate_docs(TEMP_MD_PATH)
+
+
+from docx import Document
+from docx.oxml import OxmlElement
+from docx.oxml.ns import qn
+
+def set_page_borders(doc):
+    """Set thick black border for all pages."""
+    sections = doc.sections
+    for section in sections:
+        # Get the page borders element from the section's properties
+        sectPr = section._sectPr  # section properties
+        pgBorders = OxmlElement('w:pgBorders')
+
+        # Add attributes for the border
+        for border_name in ['top', 'left', 'bottom', 'right']:
+            border = OxmlElement(f'w:{border_name}')
+            border.set(qn('w:val'), 'single')  # Border style: 'single' is a solid line
+            border.set(qn('w:sz'), '12')  # Border size: 12 represents 6pt thickness
+            border.set(qn('w:space'), '24')  # Space between text and border
+            border.set(qn('w:color'), '000000')  # Border color: black
+            
+            pgBorders.append(border)
+
+        # Add the borders to the section properties
+        sectPr.append(pgBorders)
+
+# Example usage
+doc = Document()
+
+# Add cover page with title, authors, and date
+add_cover_page_and_toc(doc, "My Project Documentation", ["Author 1", "Author 2"])
+
+# Add borders to all pages (including cover page)
+set_page_borders(doc)
+
+# Save the document
+doc.save("final_output_with_borders.docx")
