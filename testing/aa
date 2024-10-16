@@ -4,13 +4,13 @@ from docx.shared import Pt
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.oxml.ns import qn
 from docx.oxml import OxmlElement
-from markdown import markdown
+import pypandoc
 
-# Path to the folder with markdown files
+# Set the path for the markdown files
 TEMP_MD_PATH = r"C:\Users\naveen.jagadeesan\Desktop\Naveen_repoagent\temp_files"
 
 def get_all_md_files(path):
-    """Retrieve all markdown files from the specified path."""
+    """Retrieve all markdown files from the given path."""
     md_files = []
     for root, _, files in os.walk(path):
         for file in files:
@@ -19,7 +19,7 @@ def get_all_md_files(path):
     return md_files
 
 def add_cover_page_and_toc(doc, title, author):
-    """Add a cover page and Table of Contents (TOC) to the document."""
+    """Add a cover page and Table of Contents (TOC) at the start of the document."""
     # --- Cover Page ---
     title_paragraph = doc.add_paragraph()
     title_run = title_paragraph.add_run(title)
@@ -54,35 +54,40 @@ def add_cover_page_and_toc(doc, title, author):
     doc.add_page_break()
 
 def add_markdown_content(doc, md_files):
-    """Parse and add content from markdown files to the DOCX document."""
+    """Convert markdown files and add their content directly into the DOCX."""
     for md_file in md_files:
-        with open(md_file, 'r', encoding='utf-8') as f:
-            md_content = f.read()
-            html_content = markdown(md_content)  # Convert markdown to HTML
+        # Convert each markdown file to a string with pypandoc
+        md_content = pypandoc.convert_file(md_file, 'plain')  # Convert to plain text
 
-            # Add HTML content to the DOCX as plain text (you can enhance this part further)
-            doc.add_paragraph(html_content)
+        # Add a heading for the file name
+        heading = os.path.basename(md_file).replace(".md", "")
+        doc.add_heading(heading, level=2)
+
+        # Add the converted markdown content
+        doc.add_paragraph(md_content)
+
+        # Add a page break after each file
+        doc.add_page_break()
 
 def generate_docs(folder):
-    """Generate the DOCX with cover page, TOC, and markdown content."""
-    # Create a new DOCX document
-    doc = Document()
-
-    # Add cover page and TOC
-    add_cover_page_and_toc(doc, "My Project Documentation", "Naveen Jagadeesan")
-
-    # Get all markdown files and add their content to the DOCX
+    """Main function to generate the final DOCX with cover page, TOC, and markdown content."""
     md_files = get_all_md_files(folder)
     if not md_files:
         print("No markdown files found in the specified folder.")
         return
 
+    # Create a new document and add cover page and TOC
+    doc = Document()
+    add_cover_page_and_toc(doc, "My Project Documentation", "Naveen Jagadeesan")
+
+    # Add markdown content starting on the third page
     add_markdown_content(doc, md_files)
 
     # Save the final DOCX
-    output_file = os.path.join(folder, "final_output.docx")
-    doc.save(output_file)
-    print(f"Final DOCX saved at: {output_file}")
+    final_output_path = os.path.join(folder, "final_output.docx")
+    doc.save(final_output_path)
+
+    print(f"Final DOCX saved at: {final_output_path}")
 
 # --- Execute the function ---
 if __name__ == "__main__":
