@@ -1,110 +1,14 @@
-We've designed this guide to be a clear and concise reference, ensuring a smooth workflow and maximizing the project's efficiency. By following these steps, you'll gain a thorough understanding of the project's process, enabling you to confidently navigate its various stages and achieve the optimal results. We're confident that this guide will empower you to utilize the project's full potential and achieve your desired outcomes.
-
-
-from fastapi import FastAPI
-from calculator import Calculator
-import uvicorn
-import asyncio
-import requests
-import math
-import json
-from flask import Flask , Jsonify
-
-# GLOBAL VARIABLE
-GLOBAL_CONFIG = {
-    "api_version": "1.0.0",
-    "default_currency": "USD"
-}
-
-app = FastAPI()
-app1 = Flask(__name__)
-
-@app.get("/sum/{a}/{b}")
-def calculate_sum(a: int, b: int):
-    """Calculates the sum of two numbers."""
-    calc = Calculator()
-    return {"result": calc.sum(a, b), "api_version": GLOBAL_CONFIG["api_version"]}
-
-@app.get("/difference/{a}/{b}")
-def calculate_difference(a: int, b: int):
-    """Calculates the difference of two numbers."""
-    calc = Calculator()
-    return {"result": calc.difference(a, b)}
-
-@app.get("/multiply/{a}/{b}")
-async def calculate_multiply(a: int, b: int):
-    """Calculates the product of two numbers asynchronously."""
-    calc = Calculator()
-    return {"result": await calc.async_multiply(a, b)}
-
-@app.get("/double/{value}")
-def calculate_double(value: int):
-    """Doubles the given value."""
-    calc = Calculator()
-    return {"result": calc.double(value)}
-
-@app.get("/")
-async def root():  
-    return {"message": "Welcome to the calculator API!", "api_version": GLOBAL_CONFIG["api_version"]}
-
-
-# annotations using Function Wrapper
-
-def sum_api(func):
-    def wrapper(a: int, b: int, *args, **kwargs):
-        response = requests.get(f"http://127.0.0.1:8000/sum/{a}/{b}")
-        response.raise_for_status()
-        sum_result = response.json()["result"]
-        return func(sum_result, a, b, *args, **kwargs)  # Pass the sum to the function
-    return wrapper
-
-@sum_api  # Apply the decorator
-def perform_factorial_calculations(sum_result: int, a: int, b: int):
-    square_root = math.factorial(sum_result)
-    return square_root
-
-
-# annotations using Direct API Call
-
-def api_call(url: str, method: str = "GET"):
-    def decorator(func):
-        def wrapper(*args, **kwargs):
-            response = requests.request(method, url, *args, **kwargs)
-            response.raise_for_status()
-            return func(response.json(), *args, **kwargs)
-        return wrapper
-    return decorator
-
-@api_call(url="http://127.0.0.1:8000/difference/{a}/{b}", method="GET")  # Apply the decorator
-def perform_squareroot_calculations(api_response: dict, a: int, b: int):
-    sum_result = api_response["result"]
-    square_root = math.sqrt(sum_result)
-    # ... perform further calculations ... 
-    return square_root
-
-
-@app1.route('/difference/<int:a>/<int:b>')
-def calculate_difference(a, b):
-    """Calculates the difference of two numbers."""
-    calc = Calculator()
-    result = calc.difference(a, b)
-    return jsonify({"result": result})
-
-
-
 import os
-from markdown import markdown
 from docx import Document
 from docx.shared import Pt, RGBColor
-from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_PARAGRAPH_ALIGNMENT
-from docx.oxml.ns import qn
+from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.oxml import OxmlElement
-from docx.enum.style import WD_STYLE_TYPE
+from docx.oxml.ns import qn
 import pypandoc
 from .log import logger
 
 def get_all_md_files(path):
-    """Fetches all markdown files from the given directory."""
+    """Fetch all markdown files from the directory."""
     md_files = []
     for root, _, files in os.walk(path):
         for file in files:
@@ -112,71 +16,85 @@ def get_all_md_files(path):
                 md_files.append(os.path.join(root, file))
     return md_files
 
-def add_toc(doc):
-    """Inserts a Table of Contents (TOC) at the beginning of the document."""
-    paragraph = doc.add_paragraph()
-    run = paragraph.add_run("Table of Contents\n")
+def create_cover_page(doc):
+    """Creates a cover page with the title."""
+    cover = doc.add_paragraph()
+    cover.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    run = cover.add_run("Code Analyzer Documentation\n")
     run.bold = True
-    paragraph.alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
+    run.font.size = Pt(24)
+    run.font.color.rgb = RGBColor(0, 51, 102)  # Dark blue color
 
-    # Adding a placeholder field code for TOC
-    toc = OxmlElement('w:fldSimple')
-    toc.set(qn('w:instr'), 'TOC \\o "1-3" \\h \\z \\u')  # TOC for heading levels 1-3
-    paragraph._element.append(toc)
+    # Add a page break after the cover page
+    doc.add_page_break()
+
+def add_toc(doc):
+    """Inserts a Table of Contents (TOC)."""
+    toc_paragraph = doc.add_paragraph()
+    toc_run = toc_paragraph.add_run("Table of Contents\n")
+    toc_run.bold = True
+    toc_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+
+    # Add TOC field
+    field = OxmlElement('w:fldSimple')
+    field.set(qn('w:instr'), 'TOC \\o "1-3" \\h \\z \\u')  # TOC for levels 1-3
+    toc_paragraph._element.append(field)
+
+    # Add a page break after the TOC
+    doc.add_page_break()
+
+def add_page_break_before_headings(doc):
+    """Inserts page breaks before every heading."""
+    for paragraph in doc.paragraphs:
+        if paragraph.style.name.startswith("Heading"):
+            paragraph.insert_paragraph_before().add_run().add_break()
+
+def handle_code_snippets(doc):
+    """Detects and formats code blocks differently."""
+    for paragraph in doc.paragraphs:
+        # Heuristic: Detect code-like content (JSON, YAML, or indentation patterns)
+        if any(paragraph.text.lstrip().startswith(ch) for ch in ['{', '[', '<', '"', "'"]):
+            paragraph.style = doc.styles['No Spacing']  # No spacing style for code
+            paragraph.alignment = WD_ALIGN_PARAGRAPH.LEFT
+            paragraph.font.name = 'Courier New'  # Monospaced font for code
 
 def set_styles(doc):
     """Defines custom styles for headings and normal text."""
-    # Customize 'Heading 1' style
-    style = doc.styles['Heading 1']
-    font = style.font
-    font.name = 'Arial'
-    font.size = Pt(16)
-    font.bold = True
-    font.color.rgb = RGBColor(0, 0, 139)  # Dark Blue
+    for style in doc.styles:
+        if style.type == 2 and style.name.startswith('Heading'):  # For all Heading styles
+            style.font.name = 'Arial'
+            style.font.size = Pt(16 if '1' in style.name else 14)  # Adjust size dynamically
+            style.font.color.rgb = RGBColor(0, 0, 139)  # Dark blue for all headings
 
-    # Customize 'Normal' text style
+    # Customize the 'Normal' style for regular text
     normal_style = doc.styles['Normal']
-    normal_font = normal_style.font
-    normal_font.name = 'Times New Roman'
-    normal_font.size = Pt(11)
-
-def apply_formatting(doc):
-    """Applies additional formatting like alignment and paragraph spacing."""
-    for paragraph in doc.paragraphs:
-        paragraph.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
-        paragraph.paragraph_format.space_before = Pt(10)
-        paragraph.paragraph_format.space_after = Pt(10)
-
-def add_page_break_before_headings(doc):
-    """Inserts a page break before each Heading 1."""
-    for paragraph in doc.paragraphs:
-        if paragraph.style.name.startswith("Heading 1"):
-            # Add a page break before the heading
-            paragraph.insert_paragraph_before().add_run().add_break()
+    normal_style.font.name = 'Times New Roman'
+    normal_style.font.size = Pt(11)
 
 def generate_docs(folder, repo):
-    """Generates a DOCX document with markdown content and beautifies it."""
+    """Generate DOCX with markdown content and beautify it."""
     output_file = folder / f"{os.path.basename(repo)}.docx"
-    logger.info(f"Scanning md files in: {folder}")
+    logger.info(f"Scanning markdown files in: {folder}")
     md_files = get_all_md_files(folder)
-    logger.info(f"Found {len(md_files)} md files")
+    logger.info(f"Found {len(md_files)} markdown files")
 
-    if len(md_files) > 0:
+    if md_files:
         # Convert markdown to DOCX
         pypandoc.convert_file(md_files, 'docx', outputfile=str(output_file))
 
-        # Load the generated DOCX to apply further beautification
+        # Load the DOCX to apply further beautification
         doc = Document(output_file)
 
-        # Apply beautification steps
+        # Apply formatting and beautification
+        create_cover_page(doc)
         add_toc(doc)
         set_styles(doc)
-        apply_formatting(doc)
+        handle_code_snippets(doc)
         add_page_break_before_headings(doc)
 
         # Save the beautified DOCX
         doc.save(output_file)
         logger.info(f"Beautified DOCX saved at: {output_file}")
 
-# Usage example:
+# Example usage:
 # generate_docs(folder="path_to_folder", repo="your_repo_name")
