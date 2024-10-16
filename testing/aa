@@ -1,11 +1,11 @@
 import os
+import re  # For regex-based heading detection
 from docx import Document
 from docx.shared import Pt, RGBColor
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 import pypandoc
-from .log import logger
 
 def get_all_md_files(path):
     """Fetch all markdown files from the directory."""
@@ -24,13 +24,13 @@ def create_cover_page(doc):
     run = cover.add_run("Code Analyzer Documentation")
     run.bold = True
     run.font.size = Pt(28)
-    run.font.color.rgb = RGBColor(0, 51, 102)  # Dark blue color
+    run.font.color.rgb = RGBColor(0, 51, 102)  # Dark blue
 
     # Add a page break after the cover page
     doc.add_page_break()
 
 def add_toc_placeholder(doc):
-    """Adds a TOC placeholder. Needs F9 in Word to render."""
+    """Adds a TOC placeholder. Needs to be updated in Word."""
     toc_paragraph = doc.add_paragraph()
     toc_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
 
@@ -38,7 +38,7 @@ def add_toc_placeholder(doc):
     run.bold = True
     run.font.size = Pt(24)
 
-    # Add TOC field placeholder
+    # Add the TOC field placeholder
     toc_field = OxmlElement('w:fldSimple')
     toc_field.set(qn('w:instr'), 'TOC \\o "1-3" \\h \\z \\u')
     toc_paragraph._element.append(toc_field)
@@ -47,69 +47,72 @@ def add_toc_placeholder(doc):
     doc.add_page_break()
 
 def convert_md_to_docx(md_files, temp_file):
-    """Converts markdown files to DOCX."""
+    """Converts markdown files to a temporary DOCX."""
     pypandoc.convert_file(md_files, 'docx', outputfile=temp_file)
 
 def insert_markdown_content(doc, temp_file):
     """Inserts converted markdown content into the document."""
     temp_doc = Document(temp_file)
+
+    # Append paragraphs from temp_doc to the main doc
     for paragraph in temp_doc.paragraphs:
         new_para = doc.add_paragraph(paragraph.text)
         new_para.style = paragraph.style
 
 def map_headings(doc):
-    """Ensures proper Word heading styles for the TOC."""
+    """Detects custom headings and maps them to Word styles."""
+    heading_pattern = re.compile(r"##\s*(functionDef|class)\s+\w+", re.IGNORECASE)
+
     for paragraph in doc.paragraphs:
-        if paragraph.text.startswith("# "):
-            paragraph.style = doc.styles["Heading 1"]
-        elif paragraph.text.startswith("## "):
+        # If paragraph matches the heading pattern, apply Heading 2 style
+        if heading_pattern.match(paragraph.text):
             paragraph.style = doc.styles["Heading 2"]
-        elif paragraph.text.startswith("### "):
-            paragraph.style = doc.styles["Heading 3"]
 
 def handle_code_snippets(doc):
-    """Formats code snippets differently."""
+    """Detects and formats code snippets."""
     for paragraph in doc.paragraphs:
-        if any(paragraph.text.lstrip().startswith(ch) for ch in ['{', '[', '<', '"', "'"]):
+        # If paragraph starts with specific characters, treat it as code
+        if any(paragraph.text.lstrip().startswith(ch) for ch in ['{', '[', '(', '"', "'"]):
             paragraph.style = doc.styles['No Spacing']
             paragraph.alignment = WD_ALIGN_PARAGRAPH.LEFT
             run = paragraph.runs[0]
             run.font.name = 'Courier New'  # Monospaced font
 
 def generate_docs(folder, repo):
-    """Generate a DOCX with cover, TOC, and content."""
+    """Generate a DOCX document with a cover page, TOC, and markdown content."""
     output_file = folder / f"{os.path.basename(repo)}.docx"
     temp_file = "temp_output.docx"
 
-    logger.info(f"Scanning markdown files in: {folder}")
+    # Fetch markdown files
     md_files = get_all_md_files(folder)
-    logger.info(f"Found {len(md_files)} markdown files")
 
     if md_files:
         # Convert markdown to a temporary DOCX
         convert_md_to_docx(md_files, temp_file)
 
-        # Start a new DOCX document
+        # Create a new DOCX document
         doc = Document()
 
-        # Create the cover page and TOC at the beginning
+        # Add cover page and TOC at the beginning
         create_cover_page(doc)
         add_toc_placeholder(doc)
 
         # Insert the converted markdown content
         insert_markdown_content(doc, temp_file)
 
-        # Ensure proper heading mapping for TOC
+        # Map custom headings (functions, classes) to Word styles
         map_headings(doc)
 
-        # Format code snippets
+        # Handle code snippets formatting
         handle_code_snippets(doc)
 
-        # Save the final document
+        # Save the final DOCX
         doc.save(output_file)
-        os.remove(temp_file)  # Clean up the temporary file
 
-        logger.info(f"Beautified DOCX saved at: {output_file}")
+        # Clean up temporary file
+        os.remove(temp_file)
+
+        print(f"Document saved at: {output_file}")
 
 # Example usage:
 # generate_docs(folder="path_to_folder", repo="your_repo_name")
