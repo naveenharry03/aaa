@@ -1,14 +1,20 @@
 import os
-import re  # For regex-based heading detection
+from markdown import markdown
 from docx import Document
 from docx.shared import Pt, RGBColor
-from docx.enum.text import WD_ALIGN_PARAGRAPH
-from docx.oxml import OxmlElement
+from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_PARAGRAPH_ALIGNMENT
 from docx.oxml.ns import qn
+from docx.oxml import OxmlElement
+from docx.enum.style import WD_STYLE_TYPE
+from docx.text.paragraph import Paragraph
+from docx.table import Table, _Cell
+from docx.oxml.table import CT_Tbl
+from docx.oxml.text.run import CT_R
 import pypandoc
+from .log import logger
 
 def get_all_md_files(path):
-    """Fetch all markdown files from the directory."""
+    """Fetches all markdown files from the given directory."""
     md_files = []
     for root, _, files in os.walk(path):
         for file in files:
@@ -16,103 +22,147 @@ def get_all_md_files(path):
                 md_files.append(os.path.join(root, file))
     return md_files
 
-def create_cover_page(doc):
-    """Creates a cover page with a title."""
-    cover = doc.add_paragraph()
-    cover.alignment = WD_ALIGN_PARAGRAPH.CENTER
-
-    run = cover.add_run("Code Analyzer Documentation")
+def add_toc(doc):
+    """Inserts a Table of Contents (TOC) at the beginning of the document."""
+    paragraph = doc.add_paragraph()
+    run = paragraph.add_run("Table of Contents\n")
     run.bold = True
-    run.font.size = Pt(28)
-    run.font.color.rgb = RGBColor(0, 51, 102)  # Dark blue
+    paragraph.alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
 
-    # Add a page break after the cover page
-    doc.add_page_break()
+    # Adding a placeholder field code for TOC
+    toc = OxmlElement('w:fldSimple')
+    toc.set(qn('w:instr'), 'TOC \\o "1-6" \\h \\z \\u')  # TOC for heading levels 1-6
+    paragraph._element.append(toc)
 
-def add_toc_placeholder(doc):
-    """Adds a TOC placeholder. Needs to be updated in Word."""
-    toc_paragraph = doc.add_paragraph()
-    toc_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+def set_styles(doc):
+    """Defines custom styles for headings and normal text."""
+    # Customize 'Heading 1' style
+    style = doc.styles['Heading 1']
+    font = style.font
+    font.name = 'Arial'
+    font.size = Pt(16)
+    font.bold = True
+    font.color.rgb = RGBColor(0, 0, 139)  # Dark Blue
 
-    run = toc_paragraph.add_run("Table of Contents")
-    run.bold = True
-    run.font.size = Pt(24)
+    # Customize 'Heading 2' style
+    style = doc.styles['Heading 2']
+    font = style.font
+    font.name = 'Arial'
+    font.size = Pt(14)
+    font.bold = True
+    font.color.rgb = RGBColor(0, 0, 139)  # Dark Blue
 
-    # Add the TOC field placeholder
-    toc_field = OxmlElement('w:fldSimple')
-    toc_field.set(qn('w:instr'), 'TOC \\o "1-3" \\h \\z \\u')
-    toc_paragraph._element.append(toc_field)
+    # Customize 'Heading 3' style
+    style = doc.styles['Heading 3']
+    font = style.font
+    font.name = 'Arial'
+    font.size = Pt(12)
+    font.bold = True
+    font.color.rgb = RGBColor(0, 0, 139)  # Dark Blue
 
-    # Add a page break after the TOC
-    doc.add_page_break()
+    # Customize 'Heading 4' style
+    style = doc.styles['Heading 4']
+    font = style.font
+    font.name = 'Arial'
+    font.size = Pt(10)
+    font.bold = True
+    font.color.rgb = RGBColor(0, 0, 139)  # Dark Blue
 
-def convert_md_to_docx(md_files, temp_file):
-    """Converts markdown files to a temporary DOCX."""
-    pypandoc.convert_file(md_files, 'docx', outputfile=temp_file)
+    # Customize 'Heading 5' style
+    style = doc.styles['Heading 5']
+    font = style.font
+    font.name = 'Arial'
+    font.size = Pt(8)
+    font.bold = True
+    font.color.rgb = RGBColor(0, 0, 139)  # Dark Blue
 
-def insert_markdown_content(doc, temp_file):
-    """Inserts converted markdown content into the document."""
-    temp_doc = Document(temp_file)
+    # Customize 'Heading 6' style
+    style = doc.styles['Heading 6']
+    font = style.font
+    font.name = 'Arial'
+    font.size = Pt(8)
+    font.bold = True
+    font.color.rgb = RGBColor(0, 0, 139)  # Dark Blue
 
-    # Append paragraphs from temp_doc to the main doc
-    for paragraph in temp_doc.paragraphs:
-        new_para = doc.add_paragraph(paragraph.text)
-        new_para.style = paragraph.style
+    # Customize 'Normal' text style
+    normal_style = doc.styles['Normal']
+    normal_font = normal_style.font
+    normal_font.name = 'Times New Roman'
+    normal_font.size = Pt(11)
 
-def map_headings(doc):
-    """Detects custom headings and maps them to Word styles."""
-    heading_pattern = re.compile(r"##\s*(functionDef|class)\s+\w+", re.IGNORECASE)
-
+def apply_formatting(doc):
+    """Applies additional formatting like alignment and paragraph spacing."""
     for paragraph in doc.paragraphs:
-        # If paragraph matches the heading pattern, apply Heading 2 style
-        if heading_pattern.match(paragraph.text):
-            paragraph.style = doc.styles["Heading 2"]
-
-def handle_code_snippets(doc):
-    """Detects and formats code snippets."""
-    for paragraph in doc.paragraphs:
-        # If paragraph starts with specific characters, treat it as code
-        if any(paragraph.text.lstrip().startswith(ch) for ch in ['{', '[', '(', '"', "'"]):
-            paragraph.style = doc.styles['No Spacing']
+        if paragraph.style.name.startswith("Heading"):
             paragraph.alignment = WD_ALIGN_PARAGRAPH.LEFT
-            run = paragraph.runs[0]
-            run.font.name = 'Courier New'  # Monospaced font
+        else:
+            paragraph.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
+        paragraph.paragraph_format.space_before = Pt(10)
+        paragraph.paragraph_format.space_after = Pt(10)
+
+def add_page_break_before_headings(doc):
+    """Inserts a page break before each Heading 1."""
+    for paragraph in doc.paragraphs:
+        if paragraph.style.name.startswith("Heading 1"):
+            # Add a page break before the heading
+            paragraph.insert_paragraph_before().add_run().add_break(WD_BREAK.PAGE)
+
+def preserve_code_formatting(doc):
+    """Identifies and preserves code snippets formatting."""
+    for paragraph in doc.paragraphs:
+        if "```" in paragraph.text:
+            # Code block found
+            code_lines = paragraph.text.strip().splitlines()
+            for line in code_lines:
+                # Remove indentation before inserting in a code table
+                line = line.strip()
+                if line.startswith("```"):
+                    continue  # Skip first and last lines
+                table = doc.add_table(rows=1, cols=1)
+                table.cell(0, 0).text = line
+                table.cell(0, 0).paragraph_format.alignment = WD_ALIGN_PARAGRAPH.LEFT
+                table.cell(0, 0).paragraph_format.space_before = Pt(0)
+                table.cell(0, 0).paragraph_format.space_after = Pt(0)
+                table.cell(0, 0).paragraph_format.keep_with_next = True
 
 def generate_docs(folder, repo):
-    """Generate a DOCX document with a cover page, TOC, and markdown content."""
+    """Generates a DOCX document with markdown content and beautifies it."""
     output_file = folder / f"{os.path.basename(repo)}.docx"
-    temp_file = "temp_output.docx"
-
-    # Fetch markdown files
+    logger.info(f"Scanning md files in: {folder}")
     md_files = get_all_md_files(folder)
+    logger.info(f"Found {len(md_files)} md files")
 
-    if md_files:
-        # Convert markdown to a temporary DOCX
-        convert_md_to_docx(md_files, temp_file)
-
-        # Create a new DOCX document
+    if len(md_files) > 0:
+        # Create an empty Word document
         doc = Document()
 
-        # Add cover page and TOC at the beginning
-        create_cover_page(doc)
-        add_toc_placeholder(doc)
+        # Add your cover page (if you have one)
+        # Example:
+        # doc.add_heading("My Document Title", level=0)
+        # doc.add_paragraph("Author Name")
 
-        # Insert the converted markdown content
-        insert_markdown_content(doc, temp_file)
+        # Apply beautification steps
+        add_toc(doc)
+        set_styles(doc)
 
-        # Map custom headings (functions, classes) to Word styles
-        map_headings(doc)
+        # Open the output file in append mode
+        with open(output_file, "a") as f:
+            # Convert Markdown to HTML
+            for md_file in md_files:
+                with open(md_file, 'r') as f:
+                    md_content = f.read()
+                html_content = markdown(md_content)
+                f.write(html_content)
+        
+        # Load the generated DOCX to apply further beautification
+        doc = Document(output_file)
+        apply_formatting(doc)
+        add_page_break_before_headings(doc)
+        preserve_code_formatting(doc)
 
-        # Handle code snippets formatting
-        handle_code_snippets(doc)
-
-        # Save the final DOCX
+        # Save the beautified DOCX
         doc.save(output_file)
+        logger.info(f"Beautified DOCX saved at: {output_file}")
 
-        # Clean up temporary file
-        os.remove(temp_file)
-
-        print(f"Document saved at: {output_file}")
-
-# Example usage:
+# Usage example:
 # generate_docs(folder="path_to_folder", repo="your_repo_name")
