@@ -1,14 +1,14 @@
 import os
-from markdown import markdown
 from docx import Document
-from docx.enum.text import WD_PARAGRAPH_ALIGNMENT
-from docx.oxml.ns import qn
-from docx.oxml import OxmlElement
 from docx.shared import Pt, RGBColor
-from .log import logger
+from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx.oxml import OxmlElement
+from docx.oxml.ns import qn
 import pypandoc
+from .log import logger
 
 def get_all_md_files(path):
+    """Fetch all markdown files from the directory."""
     md_files = []
     for root, _, files in os.walk(path):
         for file in files:
@@ -16,51 +16,100 @@ def get_all_md_files(path):
                 md_files.append(os.path.join(root, file))
     return md_files
 
-def add_toc(doc):
-    # Add a TOC at the beginning of the document
-    paragraph = doc.add_paragraph()
-    run = paragraph.add_run()
-    fldChar = OxmlElement('w:fldChar')
-    fldChar.set(qn('w:fldCharType'), 'begin')
-    instrText = OxmlElement('w:instrText')
-    instrText.set(qn('xml:space'), 'preserve')
-    instrText.text = 'TOC \\o "1-3" \\h \\z \\u'
-    fldChar2 = OxmlElement('w:fldChar')
-    fldChar2.set(qn('w:fldCharType'), 'separate')
-    fldChar3 = OxmlElement('w:fldChar')
-    fldChar3.set(qn('w:fldCharType'), 'end')
-    run._r.append(fldChar)
-    run._r.append(instrText)
-    run._r.append(fldChar2)
-    run._r.append(fldChar3)
+def create_cover_page(doc):
+    """Creates a cover page with a title."""
+    cover = doc.add_paragraph()
+    cover.alignment = WD_ALIGN_PARAGRAPH.CENTER
 
-def format_document(doc):
+    run = cover.add_run("Code Analyzer Documentation")
+    run.bold = True
+    run.font.size = Pt(28)
+    run.font.color.rgb = RGBColor(0, 51, 102)  # Dark blue color
+
+    # Add a page break after the cover page
+    doc.add_page_break()
+
+def add_toc_placeholder(doc):
+    """Adds a TOC placeholder. Needs F9 in Word to render."""
+    toc_paragraph = doc.add_paragraph()
+    toc_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+
+    run = toc_paragraph.add_run("Table of Contents")
+    run.bold = True
+    run.font.size = Pt(24)
+
+    # Add TOC field placeholder
+    toc_field = OxmlElement('w:fldSimple')
+    toc_field.set(qn('w:instr'), 'TOC \\o "1-3" \\h \\z \\u')
+    toc_paragraph._element.append(toc_field)
+
+    # Add a page break after the TOC
+    doc.add_page_break()
+
+def convert_md_to_docx(md_files, temp_file):
+    """Converts markdown files to DOCX."""
+    pypandoc.convert_file(md_files, 'docx', outputfile=temp_file)
+
+def insert_markdown_content(doc, temp_file):
+    """Inserts converted markdown content into the document."""
+    temp_doc = Document(temp_file)
+    for paragraph in temp_doc.paragraphs:
+        new_para = doc.add_paragraph(paragraph.text)
+        new_para.style = paragraph.style
+
+def map_headings(doc):
+    """Ensures proper Word heading styles for the TOC."""
     for paragraph in doc.paragraphs:
-        for run in paragraph.runs:
-            run.font.size = Pt(12)
-            run.font.name = 'Arial'
-            run.font.color.rgb = RGBColor(0, 0, 0)
-        paragraph.alignment = WD_PARAGRAPH_ALIGNMENT.JUSTIFY
-        paragraph.space_after = Pt(12)
-        if paragraph.style.name.startswith('Heading 1'):
-            paragraph.paragraph_format.page_break_before = True
+        if paragraph.text.startswith("# "):
+            paragraph.style = doc.styles["Heading 1"]
+        elif paragraph.text.startswith("## "):
+            paragraph.style = doc.styles["Heading 2"]
+        elif paragraph.text.startswith("### "):
+            paragraph.style = doc.styles["Heading 3"]
+
+def handle_code_snippets(doc):
+    """Formats code snippets differently."""
+    for paragraph in doc.paragraphs:
+        if any(paragraph.text.lstrip().startswith(ch) for ch in ['{', '[', '<', '"', "'"]):
+            paragraph.style = doc.styles['No Spacing']
+            paragraph.alignment = WD_ALIGN_PARAGRAPH.LEFT
+            run = paragraph.runs[0]
+            run.font.name = 'Courier New'  # Monospaced font
 
 def generate_docs(folder, repo):
+    """Generate a DOCX with cover, TOC, and content."""
     output_file = folder / f"{os.path.basename(repo)}.docx"
-    logger.info(f"Scanning md files in: {folder}")
+    temp_file = "temp_output.docx"
+
+    logger.info(f"Scanning markdown files in: {folder}")
     md_files = get_all_md_files(folder)
-    logger.info(f"Found {len(md_files)} md files")
-    if len(md_files) > 0:
-        pypandoc.convert_file(md_files, 'docx', outputfile=str(output_file))
-        
-        # Open the generated docx file
-        doc = Document(output_file)
-        
-        # Add TOC
-        add_toc(doc)
-        
-        # Format the document
-        format_document(doc)
-        
-        # Save the formatted document
+    logger.info(f"Found {len(md_files)} markdown files")
+
+    if md_files:
+        # Convert markdown to a temporary DOCX
+        convert_md_to_docx(md_files, temp_file)
+
+        # Start a new DOCX document
+        doc = Document()
+
+        # Create the cover page and TOC at the beginning
+        create_cover_page(doc)
+        add_toc_placeholder(doc)
+
+        # Insert the converted markdown content
+        insert_markdown_content(doc, temp_file)
+
+        # Ensure proper heading mapping for TOC
+        map_headings(doc)
+
+        # Format code snippets
+        handle_code_snippets(doc)
+
+        # Save the final document
         doc.save(output_file)
+        os.remove(temp_file)  # Clean up the temporary file
+
+        logger.info(f"Beautified DOCX saved at: {output_file}")
+
+# Example usage:
+# generate_docs(folder="path_to_folder", repo="your_repo_name")
