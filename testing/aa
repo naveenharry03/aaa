@@ -53,41 +53,42 @@ def add_cover_page_and_toc(doc, title, author):
     # Page break after TOC
     doc.add_page_break()
 
-def add_markdown_content(doc, md_files):
-    """Convert markdown files and add their content directly into the DOCX."""
-    for md_file in md_files:
-        # Convert each markdown file to a string with pypandoc
-        md_content = pypandoc.convert_file(md_file, 'plain')  # Convert to plain text
+def merge_markdown_to_docx(md_files, output_file):
+    """Convert markdown files to a merged DOCX using pypandoc."""
+    pypandoc.convert_file(md_files, 'docx', outputfile=output_file)
+    print(f"Merged DOCX created at: {output_file}")
 
-        # Add a heading for the file name
-        heading = os.path.basename(md_file).replace(".md", "")
-        doc.add_heading(heading, level=2)
-
-        # Add the converted markdown content
-        doc.add_paragraph(md_content)
-
-        # Add a page break after each file
-        doc.add_page_break()
+def append_existing_content(target_doc, source_docx_path):
+    """Append content from an existing DOCX to another DOCX."""
+    src_doc = Document(source_docx_path)
+    for element in src_doc.element.body:
+        target_doc.element.body.append(element)
 
 def generate_docs(folder):
-    """Main function to generate the final DOCX with cover page, TOC, and markdown content."""
+    """Main function to generate the final DOCX with cover page, TOC, and content."""
     md_files = get_all_md_files(folder)
     if not md_files:
         print("No markdown files found in the specified folder.")
         return
 
-    # Create a new document and add cover page and TOC
-    doc = Document()
-    add_cover_page_and_toc(doc, "My Project Documentation", "Naveen Jagadeesan")
+    # Temporary DOCX path for the merged markdown content
+    temp_docx_path = os.path.join(folder, "merged_content.docx")
 
-    # Add markdown content starting on the third page
-    add_markdown_content(doc, md_files)
+    # Merge markdown files into a temporary DOCX using pypandoc
+    merge_markdown_to_docx(md_files, temp_docx_path)
+
+    # Create a new document with cover page and TOC
+    final_doc = Document()
+    add_cover_page_and_toc(final_doc, "My Project Documentation", "Naveen Jagadeesan")
+
+    # Append the merged markdown content to the final document
+    append_existing_content(final_doc, temp_docx_path)
 
     # Save the final DOCX
     final_output_path = os.path.join(folder, "final_output.docx")
-    doc.save(final_output_path)
+    final_doc.save(final_output_path)
 
-    print(f"Final DOCX saved at: {final_output_path}")
+    print(f"Final DOCX with cover page and TOC saved at: {final_output_path}")
 
 # --- Execute the function ---
 if __name__ == "__main__":
