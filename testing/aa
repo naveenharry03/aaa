@@ -1,127 +1,56 @@
-from docx.shared import Pt, RGBColor
-from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_LINE_SPACING
-from docx.oxml.ns import qn
-from docx.oxml import OxmlElement
-from docx.enum.style import WD_STYLE_TYPE
+pipeline {
+    agent any
 
-def format_document(doc):
-    """Apply formatting to the content of the document."""
-    
-    # --- Set default font for the document ---
-    style = doc.styles['Normal']
-    font = style.font
-    font.name = 'Arial'  # Set default font name
-    font.size = Pt(12)  # Set default font size
-    font.color.rgb = RGBColor(0, 0, 0)  # Default font color to black
+    environment {
+        // Set the Kubernetes context if not set globally
+        KUBECONFIG = credentials('kubeconfig')  // Replace 'kubeconfig' with Jenkins credential ID for kubeconfig
+        KUBE_CLUSTER_NAME = 'aks-xxx-xxxx-xxx'  // Your Kubernetes cluster name
+        NAMESPACE = 'codeproject'               // Your Kubernetes namespace
+    }
 
-    for paragraph in doc.paragraphs:
-        # --- Identify Headings ---
-        if paragraph.style.name.startswith('Heading'):
-            heading_level = int(paragraph.style.name.split()[-1])
-            
-            if heading_level == 1:
-                paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
-                paragraph.runs[0].font.size = Pt(16)  # Larger font size for top-level headings
-                paragraph.paragraph_format.page_break_before = True  # Start new page
-            else:
-                paragraph.alignment = WD_ALIGN_PARAGRAPH.LEFT
-                paragraph.runs[0].font.size = Pt(14)  # Smaller font size for sub-headings
-            continue
-        
-        # --- Code Blocks Formatting ---
-        if '```' in paragraph.text or paragraph.text.startswith('{') or paragraph.text.startswith('}'):
-            for run in paragraph.runs:
-                run.font.name = 'Courier New'  # Monospaced font for code snippets
-                run.font.size = Pt(10)  # Smaller font size for code blocks
-            paragraph.alignment = WD_ALIGN_PARAGRAPH.LEFT
-            continue
+    stages {
+        stage('Checkout') {
+            steps {
+                // Checkout the code from your repository
+                git branch: 'main', url: 'https://your-repo-url.git'
+            }
+        }
 
-        # --- Bullet Points and Numbered Lists ---
-        if paragraph.text.startswith('- ') or paragraph.text.startswith('* '):
-            paragraph.alignment = WD_ALIGN_PARAGRAPH.LEFT
-            paragraph.paragraph_format.left_indent = Inches(0.25)  # Indent bullet points
-            continue
+        stage('Configure Cluster Context') {
+            steps {
+                // Set up the kubectl context to ensure you're targeting the correct cluster
+                sh 'kubectl config use-context $KUBE_CLUSTER_NAME'
+            }
+        }
 
-        # --- General Paragraph Formatting ---
-        paragraph.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY  # Justify normal text
-        paragraph.paragraph_format.line_spacing = WD_LINE_SPACING.SINGLE  # Single line spacing
-        paragraph.paragraph_format.space_before = Pt(6)  # Add spacing before paragraphs
-        paragraph.paragraph_format.space_after = Pt(6)  # Add spacing after paragraphs
+        stage('Apply ConfigMap') {
+            steps {
+                // Apply the ConfigMap
+                sh 'kubectl apply -f configmap.yaml --namespace=$NAMESPACE'
+            }
+        }
 
-    # Apply styles to bullets, numbering, and other lists (if necessary)
-    for style in doc.styles:
-        if style.type == WD_STYLE_TYPE.PARAGRAPH and 'List' in style.name:
-            style.paragraph_format.left_indent = Inches(0.25)
-            style.font.name = 'Arial'
-            style.font.size = Pt(12)
+        stage('Deploy Application') {
+            steps {
+                // Apply the deployment
+                sh 'kubectl apply -f deployment1.yaml --namespace=$NAMESPACE'
+            }
+        }
 
-def beautify_and_format_docx(temp_docx_path, output_docx_path):
-    """Apply beautification and formatting to the DOCX after merging."""
-    doc = Document(temp_docx_path)
-    
-    # Apply formatting to the document
-    format_document(doc)
+        stage('Expose Service') {
+            steps {
+                // Apply the service
+                sh 'kubectl apply -f service.yaml --namespace=$NAMESPACE'
+            }
+        }
+    }
 
-    # Save the updated document
-    doc.save(output_docx_path)
-    print(f"Formatted document saved at: {output_docx_path}")
-
-# --- Execute the function after the markdown has been merged into DOCX ---
-def generate_docs_with_formatting(folder):
-    """Main function to generate the final DOCX with cover page, TOC, content, and formatting."""
-    md_files = get_all_md_files(folder)
-    if not md_files:
-        print("No markdown files found in the specified folder.")
-        return
-
-    # Temporary DOCX path for the merged markdown content
-    temp_docx_path = os.path.join(folder, "merged_content.docx")
-
-    # Merge markdown files into a temporary DOCX using pypandoc
-    merge_markdown_to_docx(md_files, temp_docx_path)
-
-    # Create a new document with cover page and TOC
-    final_doc = Document()
-    add_cover_page_and_toc(final_doc, "My Project Documentation", "Naveen Jagadeesan")
-
-    # Append the merged markdown content to the final document
-    append_existing_content(final_doc, temp_docx_path)
-
-    # Save the final DOCX before formatting
-    final_output_path = os.path.join(folder, "final_output_unformatted.docx")
-    final_doc.save(final_output_path)
-
-    # Apply formatting and beautification
-    beautify_and_format_docx(final_output_path, os.path.join(folder, "final_output_formatted.docx"))
-
-    # Update the TOC in the formatted document
-    update_toc(os.path.join(folder, "final_output_formatted.docx"))
-
-    print(f"Final formatted DOCX with cover page, TOC, and beautification saved at: {final_output_path}")
-
-# --- Execute the function ---
-if __name__ == "__main__":
-    generate_docs_with_formatting(TEMP_MD_PATH)
-
-def find_cover_and_toc_end(target_doc):
-    """Dynamically find the index where the cover page and TOC end."""
-    cover_end_index = 0
-    toc_end_index = 0
-    found_toc = False
-
-    # Loop through paragraphs to detect cover and TOC
-    for idx, paragraph in enumerate(target_doc.paragraphs):
-        # Check for cover page: detect title or author paragraph (assume center alignment or large font)
-        if paragraph.alignment == WD_PARAGRAPH_ALIGNMENT.CENTER and paragraph.runs and paragraph.runs[0].font.size == Pt(30):
-            cover_end_index = idx  # Assume this is the end of the cover page
-
-        # Check for TOC: detect the paragraph with TOC (based on specific text or field)
-        if 'Table of Contents' in paragraph.text:
-            found_toc = True
-
-        if found_toc and paragraph.text.strip() == '' and paragraph.alignment == WD_PARAGRAPH_ALIGNMENT.CENTER:
-            toc_end_index = idx  # Assume empty paragraph and alignment indicates the end of TOC
-            break
-    
-    # Return the index after TOC ends
-    return toc_end_index + 1
+    post {
+        success {
+            echo 'Deployment completed successfully!'
+        }
+        failure {
+            echo 'Deployment failed!'
+        }
+    }
+}
