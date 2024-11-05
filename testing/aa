@@ -1,56 +1,19 @@
-pipeline {
-    agent any
-
-    environment {
-        // Set the Kubernetes context if not set globally
-        KUBECONFIG = credentials('kubeconfig')  // Replace 'kubeconfig' with Jenkins credential ID for kubeconfig
-        KUBE_CLUSTER_NAME = 'aks-xxx-xxxx-xxx'  // Your Kubernetes cluster name
-        NAMESPACE = 'codeproject'               // Your Kubernetes namespace
-    }
-
-    stages {
-        stage('Checkout') {
-            steps {
-                // Checkout the code from your repository
-                git branch: 'main', url: 'https://your-repo-url.git'
-            }
-        }
-
-        stage('Configure Cluster Context') {
-            steps {
-                // Set up the kubectl context to ensure you're targeting the correct cluster
-                sh 'kubectl config use-context $KUBE_CLUSTER_NAME'
-            }
-        }
-
-        stage('Apply ConfigMap') {
-            steps {
-                // Apply the ConfigMap
-                sh 'kubectl apply -f configmap.yaml --namespace=$NAMESPACE'
-            }
-        }
-
-        stage('Deploy Application') {
-            steps {
-                // Apply the deployment
-                sh 'kubectl apply -f deployment1.yaml --namespace=$NAMESPACE'
-            }
-        }
-
-        stage('Expose Service') {
-            steps {
-                // Apply the service
-                sh 'kubectl apply -f service.yaml --namespace=$NAMESPACE'
-            }
-        }
-    }
-
-    post {
-        success {
-            echo 'Deployment completed successfully!'
-        }
-        failure {
-            echo 'Deployment failed!'
-        }
-    }
-}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-openai-egress
+  namespace: code-analyzer
+spec:
+  podSelector:
+    matchLabels:
+      app: code-analyzer
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - ipBlock:
+            cidr: <openai-instance-ip-address>/32  # Replace with the IP of the OpenAI instance
+      ports:
+        - protocol: TCP
+          port: 443   # Allow HTTPS traffic to OpenAI instance
