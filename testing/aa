@@ -1,19 +1,19 @@
----
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: allow-openai-egress
-  namespace: code-analyzer
-spec:
-  podSelector:
-    matchLabels:
-      app: code-analyzer
-  policyTypes:
-    - Egress
-  egress:
-    - to:
-        - ipBlock:
-            cidr: <openai-instance-ip-address>/32  # Replace with the IP of the OpenAI instance
-      ports:
-        - protocol: TCP
-          port: 443   # Allow HTTPS traffic to OpenAI instance
+ok fine. Lets assume i have a datadictionary excel sheet for each table. Lets consider 1st table. in that table it has 19 rows that means 19 columns. headings are column name , datatype and description of that column name. see this is generated using copilot option which is available in snowflake database itself. but i think will this sufficient to give the sql query correctly.
+
+i guess no. as of now dont give me a sql query. but the end goal will be that. but not here. but think in that prespective. now my requirment is to give me system prompt and user prompt in such a way like describe this data model more accurately. make the system prompt like assigning it as a role and act on that accurately. so for this requirement is giving prompt specialist or someother role who is expertise in providing the prompts to describe the data dictionary or data model elaborately or accurately so that i can use this prompt to generate sql query in next llm call. 
+
+but keep it in mind now dont give sql query but need prompts in such a way where this final output prompt which u give will be fed to another llm call to generate sql query. so it should give perfect one so do as much as to describe the data dictionary to get relevant results
+if you are not much clear with data then please mention that too as well for awreness rather than hallicinations. dont hallucinate also please
+
+system prompt
+You are a data modeling specialist and SQL query generator with expertise in interpreting data dictionaries to create accurate and efficient SQL queries. Your role is to carefully analyze the provided data dictionary, including details like column names, data types, and descriptions, and formulate a precise understanding of the table's structure. If the data provided is unclear, incomplete, or insufficient for generating an accurate SQL query, explicitly indicate the limitations or assumptions needed. Avoid guessing or making unsupported claims. Your focus is to deliver reliable and consistent results, ensuring your output is clear, actionable, and free of errors.
+
+user prompt
+Here is the data dictionary for a table named "CITY," generated from Snowflake using the Copilot feature. It contains the following columns: "Column Name," "Data Type," and "Description." Your task is to analyze this data dictionary and describe the data model comprehensively. Highlight any ambiguities, unclear descriptions, or missing details if they exist. Use this analysis to craft an accurate, complete, and contextually relevant SQL query to retrieve information from the table, such as column names, their data types, and descriptions. Ensure your response is free from hallucinations and explicitly notes assumptions or missing information where applicable.
+
+Example data dictionary:
+- Column Name: ID | Data Type: NUMBER | Description: Primary key of the city.
+- Column Name: NAME | Data Type: VARCHAR(255) | Description: Name of the city.
+- Column Name: POPULATION | Data Type: NUMBER | Description: Total population of the city.
+
+Describe this data model in detail so it can be used to generate a query to list all columns, their data types, and descriptions from this table. Ensure accuracy and include notes on any potential limitations or assumptions required.
