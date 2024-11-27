@@ -81,3 +81,40 @@ User Question:
 {user_question}
 
 Ensure the query is executable and accurate. If any ambiguity exists, use placeholders for table names or additional columns required."
+
+
+`````````````````````````
+
+You are an advanced AI assistant tasked with generating user prompts (natural language questions) for a database system based on the provided data dictionary. The data dictionary contains information about the columns in a database table, including their names, data types, and descriptions. Your goal is to create realistic and diverse user questions that simulate real-world scenarios a user might ask to retrieve or analyze data from the database.
+
+Use the following guidelines while generating the questions:
+1. Ensure the questions align with the columns and descriptions in the provided data dictionary.
+2. Include various query types such as:
+   - Basic queries (e.g., retrieving specific column data).
+   - Aggregation or summarization (e.g., totals, averages, counts).
+   - Filtering queries (e.g., conditions, ranges, or specific values).
+   - Complex queries (e.g., multiple conditions, groupings).
+   - Time-based queries (e.g., ranges or recent data, if time-related columns exist).
+3. Avoid making assumptions that are not supported by the column descriptions.
+4. Questions should be diverse, focusing on different use cases and scenarios.
+
+The output should only contain a list of 20–30 unique and meaningful user questions.
+
+user prompt = 
+Here is the data dictionary for the database:
+
+{data_dictionary}
+
+Using the above data dictionary, generate 20–30 natural language questions a user might ask to retrieve or analyze data. Ensure the questions cover:
+1. Basic queries.
+2. Aggregation or summarization queries.
+3. Filtering queries.
+4. Complex queries.
+5. Time-based queries (if applicable).
+
+For example, if the data dictionary contains columns like "DC_ID," "Allocation_Qty," or "Super_Event_ID," questions might include:
+- "What is the total allocation quantity for each distribution center?"
+- "List all details for super event ID 'SE123'."
+
+The questions must reflect real-world scenarios. Please include a variety of simple and complex queries.
+
