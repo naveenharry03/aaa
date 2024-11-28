@@ -118,3 +118,98 @@ For example, if the data dictionary contains columns like "DC_ID," "Allocation_Q
 
 The questions must reflect real-world scenarios. Please include a variety of simple and complex queries.
 
+
+
+`````````````````````````
+
+import os
+import json
+import pandas as pd
+import streamlit as st
+
+def ensure_temp_folder():
+    """Ensures the 'temp' folder exists in the root directory."""
+    temp_folder = "temp"
+    if not os.path.exists(temp_folder):
+        os.makedirs(temp_folder)
+    return temp_folder
+
+def validate_excel(file_path):
+    """Validates if the uploaded file is a valid Excel file."""
+    try:
+        df = pd.read_excel(file_path)
+        return df
+    except Exception as e:
+        st.error(f"Invalid Excel file: {e}")
+        return None
+
+def create_metadata_json(database_name, schema_name, table_name, df):
+    """Creates a metadata JSON from the given DataFrame."""
+    metadata = {
+        "database_name": database_name,
+        "schema_name": schema_name,
+        "table_name": table_name,
+        "columns": []
+    }
+
+    for _, row in df.iterrows():
+        column_data = {
+            "column_name": row["Column Name"],
+            "data_type": row["Data Type"],
+            "column_description": row["Column Description"]
+        }
+        metadata["columns"].append(column_data)
+
+    return metadata
+
+# Streamlit App
+st.title("Conversational AI Chatbot & Metadata Manager")
+
+tabs = st.tabs(["Conversational AI Bot", "Metadata Generator"])
+
+# Second Tab: Metadata Generator
+with tabs[1]:
+    st.header("Metadata Generator")
+    st.info("Upload a valid data dictionary in .xlsx format. Only .xlsx files are supported.")
+
+    # Input fields
+    database_name = st.text_input("Database Name")
+    schema_name = st.text_input("Schema Name")
+    table_name = st.text_input("Table Name")
+
+    # File upload
+    uploaded_file = st.file_uploader("Upload Data Dictionary (Excel file)", type=["xlsx"])
+
+    if uploaded_file and database_name and schema_name and table_name:
+        temp_folder = ensure_temp_folder()
+        file_path = os.path.join(temp_folder, uploaded_file.name)
+
+        # Save the uploaded file
+        with open(file_path, "wb") as f:
+            f.write(uploaded_file.getbuffer())
+
+        # Validate the Excel file
+        df = validate_excel(file_path)
+        if df is not None:
+            # Ensure required columns exist
+            required_columns = ["Column Name", "Data Type", "Column Description"]
+            if all(col in df.columns for col in required_columns):
+                metadata = create_metadata_json(database_name, schema_name, table_name, df)
+
+                # Save metadata JSON
+                output_folder = "datadictionary"
+                if not os.path.exists(output_folder):
+                    os.makedirs(output_folder)
+
+                json_file_path = os.path.join(output_folder, f"{table_name}.json")
+                with open(json_file_path, "w") as json_file:
+                    json.dump(metadata, json_file, indent=4)
+
+                st.success(f"Metadata JSON successfully created: {json_file_path}")
+                st.json(metadata)
+            else:
+                st.error("Uploaded Excel file does not contain the required columns: Column Name, Data Type, Column Description.")
+    elif uploaded_file and (not database_name or not schema_name or not table_name):
+        st.error("Please fill in all required fields: Database Name, Schema Name, and Table Name.")
+
+
