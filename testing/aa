@@ -213,3 +213,35 @@ with tabs[1]:
         st.error("Please fill in all required fields: Database Name, Schema Name, and Table Name.")
 
 
+``````````````````````````````````````
+
+from langchain.llms.base import LLM
+from typing import Optional, List, Any
+from helpers.log import logger  # Assuming this exists in your helpers folder
+from chatengine import ChatEngine
+
+class CustomChatEngineLLM(LLM):
+    def __init__(self, setting):
+        self.chat_engine = ChatEngine(setting)  # Initialize your existing ChatEngine
+
+    @property
+    def _llm_type(self) -> str:
+        return "azure-openai-chat"
+
+    def _call(self, prompt: str, stop: Optional[List[str]] = None) -> str:
+        """Send the prompt to ChatEngine and return the response."""
+        try:
+            client = self.chat_engine.get_llm_client()
+            sys_prompt = "You are a helpful assistant."  # Example system prompt
+            usr_prompt = prompt
+
+            response_message, _ = self.chat_engine.generate_llm_response(client, sys_prompt, usr_prompt)
+            if response_message:
+                return response_message
+            else:
+                raise ValueError("Failed to generate a response from the ChatEngine.")
+        except Exception as e:
+            logger.error(f"Error in LangChain wrapper: {e}")
+            return "I'm sorry, I encountered an error."
+
+
