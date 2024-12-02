@@ -127,3 +127,69 @@ Scores for word 'sunglasses':
 {'entity': 33.33333333333333, 'column name': 0.0, 'column datatype': 28.57142857142857, 'column description': 30.508474576271183}
 {'entity': 30.769230769230774, 'column name': 0.0, 'column datatype': 28.57142857142857, 'column description': 29.508196721311478}
 
+````````````````````````
+
+import os
+import json
+from rapidfuzz import fuzz
+from tqdm import tqdm
+
+def process_metadata(datadictionary_path, keywords, threshold=50):
+    final_results = []
+
+    # Iterate through all JSON files in the datadictionary folder
+    json_files = [f for f in os.listdir(datadictionary_path) if f.endswith('.json')]
+
+    for json_file in tqdm(json_files, desc="Processing JSON files"):
+        file_path = os.path.join(datadictionary_path, json_file)
+
+        # Load JSON content
+        with open(file_path, 'r') as f:
+            metadata = json.load(f)
+
+        table_name = metadata['table_name']
+        database_name = metadata['database name']
+        schema_name = metadata['schema']
+        entities = metadata['entities']
+
+        for keyword in keywords:
+            for entity in entities:
+                result = {}
+
+                fields_to_compare = {
+                    "entity": entity["entity"],
+                    "columnname": entity["column name"],
+                    "columndatatype": entity["column datatype"],
+                    "columndescription": entity["column description"],
+                }
+
+                for field, value in fields_to_compare.items():
+                    score = fuzz.ratio(keyword.lower(), str(value).lower())
+                    rounded_score = round(score, 2)
+                    result[field] = [value, rounded_score]
+
+                # If any score exceeds the threshold, add to final results
+                if any(score[1] > threshold for score in result.values()):
+                    matched_fields = {
+                        "keyword": keyword,
+                        "table_name": table_name,
+                        "database_name": database_name,
+                        "schema_name": schema_name,
+                        "matches": result,
+                    }
+                    final_results.append(matched_fields)
+
+    return final_results
+
+# Input details
+datadictionary_path = "./datadictionary"  # Update the path to your datadictionary folder
+keywords = ['start', 'date', 'dc', 'id', 'distribution', 'center', 'conroe', 'city', 'category', 'sunglasses']
+threshold = 50
+
+# Run the function
+results = process_metadata(datadictionary_path, keywords, threshold)
+
+# Display final results
+print("Matching Metadata Fields:")
+for item in results:
+    print(json.dumps(item, indent=2))
