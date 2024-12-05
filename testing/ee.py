@@ -261,3 +261,40 @@ if connection:
     cursor.close()
     connection.close()
 
+
+
+
+  for result in final_results:
+        table_name = result["table_name"]
+        matches = result["matches"]
+
+        # Iterate through each match in the result
+        for field, values in matches.items():
+            entity_name = values[0]  # Extract the entity name
+
+            # Create a unique key for the combination of table_name and entity_name
+            unique_key = (table_name, entity_name)
+
+            # Check if this combination already exists in unique_results
+            if unique_key not in unique_results:
+                # If not, add the result to the unique results dictionary
+                unique_results[unique_key] = {
+                    "keyword": result["keyword"],
+                    "table_name": table_name,
+                    "database_name": result["database_name"],
+                    "schema_name": result["schema_name"],
+                    "mean_score": result["mean_score"],
+                    "matches": {field: values},
+                }
+            else:
+                # Update the existing entry if the new mean_score is higher
+                if result["mean_score"] > unique_results[unique_key]["mean_score"]:
+                    unique_results[unique_key].update({
+                        "keyword": result["keyword"],
+                        "mean_score": result["mean_score"],
+                        "matches": {field: values},
+                    })
+
+    # Convert the unique_results dictionary back into a list
+    filtered_results = list(unique_results.values())
+    return filtered_results
