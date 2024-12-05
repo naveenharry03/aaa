@@ -193,3 +193,71 @@ results = process_metadata(datadictionary_path, keywords, threshold)
 print("Matching Metadata Fields:")
 for item in results:
     print(json.dumps(item, indent=2))
+
+
+
+from azure.identity import ClientSecretCredential
+from azure.keyvault.secrets import SecretClient
+import snowflake.connector
+import os
+
+def get_private_key_from_keyvault(keyvault_url, tenant_id, client_id, client_secret, secret_name):
+    """
+    Fetches the private key from Azure Key Vault.
+    """
+    # Authenticate with Azure Key Vault
+    credential = ClientSecretCredential(tenant_id=tenant_id, client_id=client_id, client_secret=client_secret)
+    secret_client = SecretClient(vault_url=keyvault_url, credential=credential)
+    
+    # Retrieve the private PEM key
+    secret = secret_client.get_secret(secret_name)
+    return secret.value
+
+def connect_to_snowflake(account, user, role, warehouse, database, schema, private_key_pem):
+    """
+    Connects to Snowflake using the provided parameters and a private PEM key.
+    """
+    try:
+        connection = snowflake.connector.connect(
+            account=account,
+            user=user,
+            role=role,
+            warehouse=warehouse,
+            database=database,
+            schema=schema,
+            private_key=private_key_pem
+        )
+        print("Connection successful!")
+        return connection
+    except Exception as e:
+        print(f"Error connecting to Snowflake: {e}")
+        return None
+
+# Parameters
+account = "<your_account>"
+user = "<your_user>"
+role = "<your_role>"
+warehouse = "<your_warehouse>"
+database = "<your_database>"
+schema = "<your_schema>"
+keyvault_url = "<your_keyvault_url>"
+client_id = "<your_client_id>"
+tenant_id = "<your_tenant_id>"
+client_secret = "<your_client_secret>"
+pem_secret_name = "<your_pem_secret_name>"  # Secret name in Azure Key Vault
+
+# Fetch the private key from Key Vault
+private_key_pem = get_private_key_from_keyvault(keyvault_url, tenant_id, client_id, client_secret, pem_secret_name)
+
+# Connect to Snowflake
+connection = connect_to_snowflake(account, user, role, warehouse, database, schema, private_key_pem)
+
+# Perform operations
+if connection:
+    cursor = connection.cursor()
+    cursor.execute("SELECT CURRENT_USER(), CURRENT_ROLE();")
+    for row in cursor:
+        print(row)
+    cursor.close()
+    connection.close()
+
