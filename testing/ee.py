@@ -335,3 +335,28 @@ Output Requirements:
 Display the retrieved results in a well-formatted table.
 Summarize the results in plain language for business users.
 Provide detailed insights, trends, and actionable analysis relevant to the user's question.
+
+  import re
+
+def convert_strings_in_where_clause(query):
+    # Regular expression to match strings in quotes (both single and double quotes)
+    # It will match 'string' or "string" in the WHERE clause
+    pattern = re.compile(r"(['\"]).*?\1")
+
+    # Function to convert matched strings to uppercase
+    def uppercase_match(match):
+        return match.group(0).upper()
+
+    # Apply the function only to the string matches
+    updated_query = re.sub(pattern, uppercase_match, query)
+
+    return updated_query
+
+# Example usage:
+response_message = 'select * from dd where city = "new york" and age = 75 and name = \'john\''
+response_message = response_message.replace("```sql", "").replace("```", "")  # Clean the response_message
+
+# Apply the transformation
+updated_response_message = convert_strings_in_where_clause(response_message)
+
+print(updated_response_message)
