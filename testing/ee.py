@@ -381,3 +381,119 @@ Don’ts:
 
 Avoid long, generic, or verbose explanations.
 Do not include technical jargon or details about the SQL query execution."
+
+import os
+import sys
+import streamlit as st
+from helpers.metadata import Metadata
+from pathlib import Path
+from langchain_openai.chat_models import AzureChatOpenAI
+from langchain_core.prompts import ChatPromptTemplate, SystemMessagePromptTemplate, HumanMessagePromptTemplate
+from langchain.chains import ConversationChain
+from langchain.memory import ConversationBufferWindowMemory
+from langchain.callbacks import get_openai_callback
+
+# Add CSS for alignment
+def add_custom_css():
+    st.markdown(
+        """
+        <style>
+        /* Align user messages to the right */
+        .stChatMessageUser {
+            display: flex;
+            justify-content: flex-end;
+            align-items: flex-start;
+        }
+        /* Align bot messages to the left */
+        .stChatMessageBot {
+            display: flex;
+            justify-content: flex-start;
+            align-items: flex-start;
+        }
+        /* Style for user's avatar */
+        .stChatMessageUser .stChatMessageAvatar {
+            margin-left: 10px;
+        }
+        /* Style for bot's avatar */
+        .stChatMessageBot .stChatMessageAvatar {
+            margin-right: 10px;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True
+    )
+
+# Add the current working directory to the system path
+sys.path.append(os.getcwd())
+
+# Initialize Streamlit app
+st.title("Snowflake AI Chatbot")
+
+# Inject custom CSS
+add_custom_css()
+
+# Initialize session state variables
+if "messages" not in st.session_state:
+    st.session_state["messages"] = [{"role": "assistant", "content": "How can I assist you today?"}]
+
+if "buffer_memory" not in st.session_state:
+    st.session_state.buffer_memory = ConversationBufferWindowMemory(k=5, return_messages=True)
+
+# Define the system and human prompts
+system_msg_prompt = SystemMessagePromptTemplate.from_template(
+    template="""Act as a Python coding assistant."""
+)
+human_msg_prompt = HumanMessagePromptTemplate.from_template(template="{input}")
+
+# Define the chat prompt template
+prompt_template = ChatPromptTemplate.from_messages(
+    [system_msg_prompt, human_msg_prompt]
+)
+
+# Initialize the LLM and conversation chain
+llm = AzureChatOpenAI()  # Define your LLM initialization logic
+conversation = ConversationChain(
+    llm=llm,
+    memory=st.session_state.buffer_memory,
+    prompt=prompt_template,
+    verbose=True
+)
+
+# Display chat messages from the session state
+for msg in st.session_state["messages"]:
+    with st.container():
+        if msg["role"] == "user":
+            # Display user's message with the right alignment
+            st.markdown(f"<div class='stChatMessageUser'><div class='stChatMessageAvatar'>👤</div>{msg['content']}</div>", unsafe_allow_html=True)
+        else:
+            # Display bot's message with the left alignment
+            st.markdown(f"<div class='stChatMessageBot'><div class='stChatMessageAvatar'>🤖</div>{msg['content']}</div>", unsafe_allow_html=True)
+
+# Input box for user to send a new message
+if user_input := st.chat_input("Type your message"):
+    # Add user message to session state
+    st.session_state["messages"].append({"role": "user", "content": user_input})
+
+    # Display the user message immediately
+    with st.container():
+        st.markdown(f"<div class='stChatMessageUser'><div class='stChatMessageAvatar'>👤</div>{user_input}</div>", unsafe_allow_html=True)
+
+    # Generate bot response
+    with st.spinner("Bot is typing..."):
+        try:
+            with get_openai_callback() as cb:
+                bot_response = conversation.predict(input=user_input)
+                st.session_state["messages"].append({"role": "assistant", "content": bot_response})
+                st.write(f"Tokens used: {cb.total_tokens}, Cost: ${cb.total_cost}")
+        except Exception as e:
+            bot_response = f"Error: {e}"
+            st.session_state["messages"].append({"role": "assistant", "content": bot_response})
+
+    # Display the bot's response
+    with st.container():
+        st.markdown(f"<div class='stChatMessageBot'><div class='stChatMessageAvatar'>🤖</div>{bot_response}</div>", unsafe_allow_html=True)
+
+# Optional: Display buffer memory (for debugging)
+if st.session_state.buffer_memory:
+    st.write(f"Buffer memory content: {st.session_state.buffer_memory.load_memory_variables({})}")
+
