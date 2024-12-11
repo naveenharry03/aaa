@@ -500,3 +500,47 @@ if st.session_state.buffer_memory:
 ````````````````````````````````````````````````````````
 
 ["full", "my", "never", "only", "hereupon", "every", "really", "to", "seems", "fifty", "me", "'ll", "their", "she", "in", "eight", "other", "becoming", "would", "yourselves", "show", "forty", "per", "as", "front", "indeed", "hereafter", "him", "’s", "are", "through", "no", "mostly", "thru", "amount", "everyone", "hereby", "under", "whenever", "whereby", "nevertheless", "upon", "since", "must", "whither", "n‘t", "move", "and", "four", "side", "onto", "by", "nothing", "yourself", "six", "one", "how", "have", "part", "unless", "’re", "amongst", "whole", "after", "almost", "our", "not", "all", "bottom", "besides", "therefore", "much", "toward", "these", "ten", "everywhere", "thereby", "i", "against", "become", "but", "few", "cannot", "can", "anyway", "call", "into", "within", "’ve", "same", "who", "‘m", "something", "take", "during", "though", "from", "even", "get", "noone", "whom", "many", "whose", "than", "thence", "see", "anyone", "the", "with", "ever", "yet", "also", "this", "sixty", "please", "top", "be", "another", "ours", "somehow", "could", "what", "then", "latterly", "'re", "we", "name", "via", "ourselves", "along", "himself", "hundred", "seeming", "whereafter", "someone", "therein", "down", "five", "over", "they", "itself", "seem", "afterwards", "became", "formerly", "anywhere", "out", "together", "his", "why", "two", "because", "moreover", "of", "about", "less", "there", "each", "serious", "when", "‘ve", "some", "'s", "neither", "them", "sometime", "he", "doing", "here", "give", "third", "well", "nowhere", "whatever", "being", "hence", "enough", "behind", "beside", "towards", "‘ll", "next", "very", "else", "before", "meanwhile", "go", "once", "mine", "on", "using", "eleven", "former", "none", "thus", "do", "most", "nobody", "between", "hers", "should", "often", "always", "around", "empty", "however", "is", "whoever", "too", "will", "thereafter", "you", "ca", "back", "now", "until", "whence", "’d", "so", "quite", "n’t", "becomes", "such", "‘s", "any", "above", "among", "nor", "while", "sometimes", "was", "wherever", "both", "whether", "everything", "keep", "whereupon", "were", "may", "except", "somewhere", "’m", "beyond", "seemed", "either", "herself", "n't", "or", "off", "‘d", "various", "does", "if", "it", "yours", "its", "nine", "perhaps", "myself", "had", "a", "beforehand", "further", "'d", "which", "has", "re", "latter", "anything", "regarding", "own", "make", "your", "used", "themselves", "just", "at", "her", "up", "might", "for", "that", "am", "where", "done", "thereupon", "twelve", "elsewhere", "put", "throughout", "without", "due", "those", "us", "wherein", "three", "say", "across", "herein", "least", "others", "whereas", "been", "again", "namely", "already", "several", "alone", "‘re", "did", "twenty", "more", "otherwise", "although", "below", "an", "made", "fifteen", "'ve", "’ll", "rather", "still", "anyhow", "'m"]
+
+
+
+import re
+
+# Dictionary with acronyms and full forms
+acronyms_dict = {
+    "AA": "Aviation Allergy",
+    "NY": "New York",
+    "LA": "Los Angeles"
+}
+
+def match_acronym_or_fullform(user_input, acronyms_dict):
+    # Normalize input for case-insensitive matching
+    user_input_lower = user_input.lower()
+    
+    # Create a reverse dictionary for matching full forms to acronyms
+    reverse_dict = {v.lower(): k for k, v in acronyms_dict.items()}
+    
+    # Check for direct matches in keys or values
+    for key, value in acronyms_dict.items():
+        key_lower = key.lower()
+        value_lower = value.lower()
+        
+        # Check if key (acronym) or value (full form) exists in input
+        if key_lower in user_input_lower or value_lower in user_input_lower:
+            return {key: value}
+    
+    # Fallback: Check for partial matches using word boundaries
+    for key, value in acronyms_dict.items():
+        if re.search(rf'\b{key.lower()}\b', user_input_lower) or \
+           re.search(rf'\b{value.lower().split()[0]}\b', user_input_lower):
+            return {key: value}
+    
+    return None  # Return None if no match is found
+
+# Example usage
+user_question = "Is there anything happening in Los?"
+result = match_acronym_or_fullform(user_question, acronyms_dict)
+
+if result:
+    print("Matched Key-Value Pair:", result)
+else:
+    print("No match found.")
