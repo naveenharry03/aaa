@@ -664,3 +664,167 @@ JSON:
 
 Provide the updated JSON with completed `entity` and `column description` fields.
 
+
+
+
+import os
+import json
+import spacy
+import re
+from sklearn.feature_extraction.text import CountVectorizer
+from sklearn.metrics.pairwise import cosine_similarity
+from tqdm import tqdm
+
+
+class filteringmetadata:
+
+    def load_stopwords(filepath):
+        with open(filepath, 'r') as file:
+            stopwords = json.load(file)
+        return set(stopwords)
+
+    def preprocess_text(user_input):
+        doc = user_input.lower().replace("?", "").split()
+        print(doc)
+        stopwords_file = os.path.join(os.getcwd(), "stopwords.txt")
+        stopwords = filteringmetadata.load_stopwords(stopwords_file)
+        custom_exclusions = {"first", "last"}
+        stopwords -= custom_exclusions
+        filtered_tokens = [token for token in doc if token not in stopwords]
+        filtered_tokens = filteringmetadata.clean_keyword(filtered_tokens)
+        print(filtered_tokens)
+        return filtered_tokens
+
+    def clean_keyword(filtered_tokens):
+        cleaned_tokens = []
+        for token in filtered_tokens:
+            if isinstance(token, str):
+                cleaned = re.sub(r"[^\w\s]", "", token)
+                if cleaned.endswith("s") and len(cleaned) > 1:
+                    cleaned = cleaned[:-1]
+                cleaned_tokens.append(cleaned)
+            else:
+                print(f"Skipping non-string token: {token}")
+        return cleaned_tokens
+
+    @staticmethod
+    def cosine_similarity_tf(text1, text2):
+        """Calculate cosine similarity between two strings."""
+        vectorizer = CountVectorizer().fit_transform([text1, text2])
+        vectors = vectorizer.toarray()
+        return cosine_similarity(vectors)[0, 1]
+
+    def process_metadata(filtered_tokens, user_input):
+        METADATAFOLDER = os.path.join(os.getcwd(), "datadictionary")
+        threshold = 0.5  # Adjust threshold as needed
+        final_results = []
+
+        # Iterate through all JSON files in the datadictionary folder
+        json_files = [f for f in os.listdir(METADATAFOLDER) if f.endswith('.json')]
+        dc_id_entries = []
+
+        for json_file in tqdm(json_files, desc="Processing JSON files"):
+            file_path = os.path.join(METADATAFOLDER, json_file)
+
+            # Load JSON content
+            with open(file_path, 'r') as f:
+                metadata = json.load(f)
+
+            table_name = metadata['table_name']
+            database_name = metadata['database name']
+            schema_name = metadata['schema']
+            entities = metadata['entities']
+
+            for keyword in filtered_tokens:
+                for entity in entities:
+                    result = {}
+
+                    # Compare keyword with `entity["entity"]` using cosine similarity
+                    entity_name = entity["entity"]
+                    score = filteringmetadata.cosine_similarity_tf(keyword.lower(), entity_name.lower())
+                    rounded_score = round(score, 2)
+
+                    # Store similarity score
+                    result["entity"] = [entity_name, rounded_score]
+
+                    # Check if the similarity score exceeds the threshold
+                    if rounded_score > threshold:
+                        matched_fields = {
+                            "keyword": keyword,
+                            "table_name": table_name,
+                            "database_name": database_name,
+                            "schema_name": schema_name,
+                            "matches": result,
+                        }
+                        final_results.append(matched_fields)
+
+            # Handle special "dc_id" case
+            for entity in entities:
+                if "dc_id" in entity["column name"].lower():
+                    dc_id_entity = {
+                        "table_name": table_name,
+                        "database_name": database_name,
+                        "schema_name": schema_name,
+                        "entity": entity["entity"],
+                        "column_name": entity["column name"],
+                    }
+                    dc_id_entries.append(dc_id_entity)
+
+        # Check for acronym/fullform match
+        dc_id_check = filteringmetadata.match_acronym_or_fullform(user_input)
+
+        if dc_id_check:
+            for dc_id_entry in dc_id_entries:
+                final_results.append(
+                    {
+                        "keyword": "dc_id",
+                        "table_name": dc_id_entry["table_name"],
+                        "database_name": dc_id_entry["database_name"],
+                        "schema_name": dc_id_entry["schema_name"],
+                        "matches": {
+                            "entity": [dc_id_entry["entity"], "N/A"],
+                            "columnname": [dc_id_entry["column_name"], "N/A"],
+                        }
+                    }
+                )
+
+        return final_results, dc_id_check
+
+    def filter_final_results(final_results):
+        unique_results = {}
+
+        for result in final_results:
+            table_name = result["table_name"]
+            matches = result["matches"]
+            entity_name = matches["entity"][0]
+            column_name = matches.get("columnname", [None])[0]
+
+            unique_key = (table_name, column_name, entity_name)
+
+            if unique_key not in unique_results:
+                unique_results[unique_key] = result
+        
+        filtered_result = list(unique_results.values())
+        return filtered_result
+
+    def match_acronym_or_fullform(user_input):
+        user_input_lower = user_input.lower()
+
+        acronym_dc_id = {
+            "AA": "Naveen (NAVY)",
+            "BB": "Arun (AAVY)",
+            "CC": "FFFD (AAD)",
+            "DD": "FRGE (RERE)",
+            "EE": "DEFR (AAAA)",
+        }
+
+        for key, value in acronym_dc_id.items():
+            value_lower = value.lower()
+            match = re.match(r"(.+?)\s\((.+)\)", value_lower)
+            if match:
+                name, parenthetical = match.groups()
+                if name in user_input_lower or any(word in user_input_lower for word in parenthetical.split()):
+                    return {key: value}
+        return None
+
+
