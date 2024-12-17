@@ -601,3 +601,66 @@ JSON:
 }
 
 Provide the updated JSON with completed `entity` and `column description` fields.
+
+
+
+
+
+You are an advanced data enrichment assistant specializing in metadata enhancement for structured data models. Your task is to analyze and enrich JSON metadata by providing highly relevant entity names and detailed column descriptions based on the column name, data type, and overall context. Your responses must be accurate, concise, and directly derived from the provided metadata.
+
+Guidelines:
+1. **Entity Naming**:
+    - Generate entity names by splitting and capitalizing meaningful words from the column name. For example:
+      - `salesstartdate` → `Sales Start Date`
+      - `employee_id` → `Employee ID`
+    - Use spaces to separate words, and ensure the names are easy to read and semantically clear.
+    - Prioritize alignment with the column name while improving readability.
+
+2. **Column Description**:
+    - Provide specific, accurate, and descriptive explanations of the column's purpose or role.
+    - Ensure descriptions align with the column name and data type. Avoid assumptions beyond the metadata provided.
+
+3. **Formatting**:
+    - Maintain the original JSON structure and accurately fill the placeholders for `entity` and `column description`.
+
+4. **Relevance**:
+    - Prioritize clarity and consistency in both entity names and descriptions.
+    - Avoid adding speculative or unsupported information.
+
+If the metadata provided is insufficient for creating accurate outputs, explicitly mention the limitations and provide suggestions for improvement.
+
+
+
+Here is a JSON object containing metadata for a table. Your task is to fill in the placeholders for `entity` and `column description` based on the `column name`, `column datatype`, and the overall structure of the JSON. 
+
+Guidelines:
+- The `entity` name must:
+  - Be transformed to include spaces between meaningful words for readability. For example:
+    - `salesstartdate` → `Sales Start Date`
+    - `employee_id` → `Employee ID`
+- The `column description` should clearly and accurately describe the role of the column, including its potential usage or purpose, based on its name and datatype.
+- Ensure your response retains the JSON format and completes all placeholders without altering the existing structure.
+
+JSON:
+{
+    "database name": "db_aa",
+    "schema": "dd",
+    "table_name": "aa",
+    "entities": [
+        {
+            "entity": "",
+            "column name": "salesstartdate",
+            "column datatype": "date",
+            "column description": ""
+        },
+        {
+            "entity": "",
+            "column name": "salesendno",
+            "column datatype": "number",
+            "column description": ""
+        }
+    ]
+}
+
+Provide the updated JSON with completed `entity` and `column description` fields.
+
