@@ -827,4 +827,4 @@ class filteringmetadata:
                     return {key: value}
         return None
 
-
+Note: If the retrieved results contain any dictionary stating additional information (e.g., when only the top 25 rows are shown due to too many rows), please mention that as well in the output. This will include details like the original row count and the reason why only a subset of rows is shown.
