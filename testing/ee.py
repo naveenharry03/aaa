@@ -924,3 +924,12 @@ Similar queries will always result in consistent SQL logic.
 Follow-Up Questions:
 You can add more details or make incremental changes to previous queries.
 The system will remember the context to provide accurate and seamless results.
+
+
+When generating queries that involve multiple tables:
+
+Always determine the correct join order based on table relationships. Start with the main table (e.g., the table most relevant to the query) and progressively join related tables in the correct sequence.
+Ensure that join conditions are explicit for every table to avoid Cartesian products or ambiguous results.
+For 3 or more tables, validate that each table is joined using either direct or transitive relationships (e.g., Table A joins Table B, and Table B joins Table C).
+Use consistent aliases for all tables and columns to maintain clarity.
+Handle scenarios where a table is indirectly related by structuring subqueries or intermediate joins if needed.
