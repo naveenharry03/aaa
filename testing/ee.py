@@ -933,3 +933,10 @@ Ensure that join conditions are explicit for every table to avoid Cartesian prod
 For 3 or more tables, validate that each table is joined using either direct or transitive relationships (e.g., Table A joins Table B, and Table B joins Table C).
 Use consistent aliases for all tables and columns to maintain clarity.
 Handle scenarios where a table is indirectly related by structuring subqueries or intermediate joins if needed.
+
+
+Ensure all joins required by the relationships in the metadata are included. Do not skip or remove joins unless explicitly instructed by the user.
+Cross-check that all columns referenced in the query are logically tied to their respective tables via joins.
+The final SQL should consistently include every intermediate table and join condition necessary to avoid incomplete results.
+
+Always ensure that the SQL query includes all necessary intermediate tables and their associated join conditions based on the relationships in the metadata. Verify that no intermediate joins or conditions are omitted in the final query.
