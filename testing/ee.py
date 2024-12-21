@@ -940,3 +940,61 @@ Cross-check that all columns referenced in the query are logically tied to their
 The final SQL should consistently include every intermediate table and join condition necessary to avoid incomplete results.
 
 Always ensure that the SQL query includes all necessary intermediate tables and their associated join conditions based on the relationships in the metadata. Verify that no intermediate joins or conditions are omitted in the final query.
+
+
+
+from sentence_transformers import SentenceTransformer, util
+
+# Load a pre-trained sentence embedding model
+model = SentenceTransformer('all-MiniLM-L6-v2')
+
+# User input and metadata
+user_input = "what is the total quantity of sku's received at NJ distribution center as of today ?"
+metadata = ["start date", "end date", "supply planner name", "quantity received", 
+            "distribution center", "sku number", "sku cost", "sku descriptions", "allocated quantity"]
+
+# Generate embeddings
+input_embedding = model.encode(user_input, convert_to_tensor=True)
+metadata_embeddings = model.encode(metadata, convert_to_tensor=True)
+
+# Calculate cosine similarities
+similarities = util.cos_sim(input_embedding, metadata_embeddings)
+
+# Define a similarity threshold
+similarity_threshold = 0.3  # Adjust based on your preference
+
+# Find all matches with similarity above the threshold
+matching_indices = (similarities > similarity_threshold).nonzero(as_tuple=True)[1]  # Get indices of matches
+matching_metadata = [metadata[idx] for idx in matching_indices]
+
+# Print results
+print(f"User input: {user_input}")
+print(f"Matching metadata:")
+for match, score in zip(matching_metadata, similarities[0, matching_indices]):
+    print(f"  - {match} (Score: {score.item():.4f})")
+
+
+
+from sentence_transformers import SentenceTransformer, util
+
+# Load a pre-trained sentence embedding model
+model = SentenceTransformer('all-MiniLM-L6-v2')
+
+# User input and metadata
+user_input = "what is the total quantity of sku's received at NJ distribution center as of today ?"
+metadata = ["start date", "end date", "supply planner name", "quantity received","distribution center" , "sku number" , "sku cost" , "sku descriptions" , "allocated quantity"]
+
+# Generate embeddings
+input_embedding = model.encode(user_input, convert_to_tensor=True)
+metadata_embeddings = model.encode(metadata, convert_to_tensor=True)
+
+# Calculate cosine similarities
+similarities = util.cos_sim(input_embedding, metadata_embeddings)
+
+# Find the best match
+best_match_index = similarities.argmax()
+best_match = metadata[best_match_index]
+
+print(f"User input: {user_input}")
+print(f"Best match: {best_match}")
+
