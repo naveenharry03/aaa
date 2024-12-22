@@ -1038,3 +1038,48 @@ Handling Ambiguity:
 
 If multiple columns have similar names, differentiate them by adding contextual details to their entity names.
 If metadata lacks sufficient context, indicate this explicitly and suggest additional details.
+
+
+from sentence_transformers import SentenceTransformer, util
+from fuzzywuzzy import fuzz  # For lexical matching
+
+# Load a pre-trained sentence embedding model
+model = SentenceTransformer('all-MiniLM-L6-v2')
+
+# User input and metadata
+keyword = "today"
+metadata = ["start date", "end date", "supply planner name", "quantity received", 
+            "distribution center", "sku number", "sku cost", "sku descriptions", "allocated quantity"]
+
+# Generate embeddings
+input_embedding = model.encode(keyword, convert_to_tensor=True)
+metadata_embeddings = model.encode(metadata, convert_to_tensor=True)
+
+# Calculate cosine similarities
+similarities = util.cos_sim(input_embedding, metadata_embeddings)
+
+# Define thresholds
+high_threshold = 0.5
+low_threshold = 0.2
+
+# Matches based on high threshold
+high_matches = [(metadata[idx], score.item()) for idx, score in enumerate(similarities[0]) if score > high_threshold]
+
+# Matches based on low threshold with additional lexical checks
+low_matches = []
+for idx, score in enumerate(similarities[0]):
+    if low_threshold < score <= high_threshold:
+        lexical_score = fuzz.partial_ratio(keyword.lower(), metadata[idx].lower()) / 100
+        combined_score = (score.item() + lexical_score) / 2  # Combine semantic and lexical scores
+        if combined_score > low_threshold:  # Apply a final combined threshold
+            low_matches.append((metadata[idx], combined_score))
+
+# Combine and sort results by score
+all_matches = sorted(high_matches + low_matches, key=lambda x: x[1], reverse=True)
+
+# Print results
+print(f"Keyword: {keyword}")
+print("Matching metadata:")
+for match, score in all_matches:
+    print(f"  - {match} (Score: {score:.4f})")
+
