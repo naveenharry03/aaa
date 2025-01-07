@@ -1250,3 +1250,20 @@ Tables and Metadata:
      - participant_name (STRING): Name of the participant.
 
 Generate 10 records in JSON format based on this metadata.
+
+
+``````````````
+### Output Format:
+[
+  {
+    "user_question": "What are the names of participants for each event location?",
+    "suggested_questions": [
+      "Which events are held at a specific location with their participants?",
+      "What is the list of participants by event and location?",
+      "How many participants are registered for events at each location?"
+    ],
+    "table_names_used": ["Participants", "Locations"],
+    "column_names_used": ["participant_name", "event_id", "location_name", "location_id"]
+  },
+  ...
+]
