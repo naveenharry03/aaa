@@ -1306,3 +1306,90 @@ data = {
 df = pd.DataFrame(data)
 
 print(template_based_summary(df))
+
+``````````````````````
+
+
+from langchain.vectorstores import Chroma
+from langchain.embeddings import HuggingFaceEmbeddings
+from langchain.schema import Document
+import os
+
+# Path for ChromaDB persistence
+PERSIST_DIRECTORY = "./chroma_db"
+
+# Initialize SentenceTransformer embeddings
+model_name = "all-MiniLM-L6-v2"  # Use a pre-trained SentenceTransformer model
+embeddings = HuggingFaceEmbeddings(model_name=model_name)
+
+# Initialize ChromaDB persistent client
+vector_store = Chroma(persist_directory=PERSIST_DIRECTORY, embedding_function=embeddings)
+
+# Create a collection in ChromaDB
+collection_name = "database_questions"
+if collection_name not in vector_store.get()["collections"]:
+    collection = vector_store.add_collection(name=collection_name)
+else:
+    collection = vector_store.get_collection(name=collection_name)
+
+# Sample documents with metadata
+documents = [
+    Document(
+        page_content="What are the participant names and locations for each super event?",
+        metadata={
+            "suggested_questions": [
+                "Which locations are associated with super events and their participants?",
+                "What is the list of participants grouped by super event and location?",
+                "How many participants are present for events under each super event at specific locations?"
+            ],
+            "table_names_used": ["SuperEvents", "Locations", "Participants"],
+            "column_names_used": ["super_event_id", "event_id", "location_name", "participant_name"]
+        }
+    ),
+    Document(
+        page_content="What is the duration of events and their locations for super events?",
+        metadata={
+            "suggested_questions": [
+                "How long are events under each super event, and where are they located?",
+                "What is the start and end date of events grouped by location and super event?",
+                "Which locations have the longest-running events under a super event?"
+            ],
+            "table_names_used": ["EventDetails", "Locations", "SuperEvents"],
+            "column_names_used": ["start_date", "end_date", "location_name", "super_event_id"]
+        }
+    ),
+]
+
+# Add documents to the collection with metadata, IDs, and embeddings
+for i, doc in enumerate(documents):
+    collection.add(
+        documents=[doc.page_content],
+        metadatas=[doc.metadata],
+        ids=[f"doc_{i}"]
+    )
+
+# Persist the data to disk
+vector_store.persist()
+print(f"Collection '{collection_name}' created and persisted successfully.")
+
+
+from sentence_transformers import SentenceTransformer
+
+# Load the vector store from persistence
+vector_store = Chroma(persist_directory=PERSIST_DIRECTORY, embedding_function=embeddings)
+
+# Get the collection
+collection = vector_store.get_collection(name=collection_name)
+
+# Perform a similarity search
+query = "Show participants grouped by location and super events"
+query_embedding = embeddings.embed_query(query)
+results = collection.query(query_embeddings=[query_embedding], n_results=3)
+
+# Display results
+for i, (doc, metadata) in enumerate(zip(results["documents"], results["metadatas"])):
+    print(f"Result {i + 1}:")
+    print(f"Document: {doc}")
+    print(f"Metadata: {metadata}")
+    print()
+
