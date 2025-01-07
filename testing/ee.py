@@ -1267,3 +1267,42 @@ Generate 10 records in JSON format based on this metadata.
   },
   ...
 ]
+
+
+
+````````````````````
+
+import pandas as pd
+
+def template_based_summary(df):
+    summary = []
+    summary.append(f"The table has {df.shape[0]} rows and {df.shape[1]} columns.")
+    
+    # Summarize numeric columns
+    for col in df.select_dtypes(include="number").columns:
+        summary.append(
+            f"The column '{col}' has a mean value of {df[col].mean():.2f}, "
+            f"a minimum of {df[col].min()}, and a maximum of {df[col].max()}."
+        )
+    
+    # Summarize categorical columns
+    for col in df.select_dtypes(include="object").columns:
+        top_value = df[col].value_counts().idxmax()
+        top_count = df[col].value_counts().max()
+        summary.append(
+            f"The most frequent value in the column '{col}' is '{top_value}' "
+            f"which appears {top_count} times."
+        )
+    
+    return " ".join(summary)
+
+# Example DataFrame
+data = {
+    "S.No": [1, 2, 3],
+    "name": ["aa", "bb", "aa"],
+    "id": [101, 102, 103],
+    "city": ["delhi", "goa", "mumbai"],
+}
+df = pd.DataFrame(data)
+
+print(template_based_summary(df))
