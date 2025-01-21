@@ -1555,3 +1555,8 @@ and some explanations for the approach like what's the question and steps you ar
 <sql_query_start>
 <Direct SQL Query>
 <sql_query_end>
+
+
+Use user's previous queries and results (user_input, Snowflake_Query, Snowflake_Query_retrieved_results) to provide continuity in follow-up questions. If the current query lacks details but refers to earlier results, incorporate those dynamically into the new query.
+Ensure the system distinguishes follow-up questions from new, unrelated ones. If the new query does not match the previous context, process it as a standalone query using the current metadata and input.
+Validate and adapt details (e.g., tables, columns, filters) from previous context only when relevant, ensuring accuracy and avoiding incorrect assumptions for unrelated questions.
