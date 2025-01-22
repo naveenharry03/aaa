@@ -1567,3 +1567,10 @@ Incorporate previous query details, such as user_input, Snowflake_Query, and Sno
 When follow-up queries omit specific details (e.g., columns, filters, or table references), infer and include them from the previous context to maintain consistency with the user's intent.
 Prioritize consistency by merging previous and current queries logically, ensuring missing components (e.g., column names or filter conditions) from the follow-up query are filled based on the previous context.
 If a query appears unrelated to previous context, treat it as a standalone question and process it using normal procedures to avoid inaccurate assumptions.
+
+
+
+Prioritize immediate previous context when interpreting follow-up questions, using details from the last query (e.g., columns, filters, or tables) as the primary source for filling in missing information.
+If the user explicitly references a prior question (e.g., "use details from before" or "same as 2nd question"), retrieve details from that specific context rather than the immediate previous question.
+Ensure the follow-up question aligns with the previous context by comparing key terms (e.g., entities, categories, or identifiers). If there is no match or the question appears unrelated, treat it as a standalone query.
+Cross-check for logical consistency in follow-up queries by validating whether filters, columns, or categories match the user's stated intent, and avoid carrying over irrelevant details from earlier queries.
