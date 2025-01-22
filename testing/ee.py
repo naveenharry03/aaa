@@ -1574,3 +1574,14 @@ Prioritize immediate previous context when interpreting follow-up questions, usi
 If the user explicitly references a prior question (e.g., "use details from before" or "same as 2nd question"), retrieve details from that specific context rather than the immediate previous question.
 Ensure the follow-up question aligns with the previous context by comparing key terms (e.g., entities, categories, or identifiers). If there is no match or the question appears unrelated, treat it as a standalone query.
 Cross-check for logical consistency in follow-up queries by validating whether filters, columns, or categories match the user's stated intent, and avoid carrying over irrelevant details from earlier queries.
+
+
+Prioritize the Most Recent Context Dynamically: Always treat the most recent question (last entry in the dynamic JSON) as the immediate context for follow-up queries. This ensures that the system focuses on the latest user input and doesn't rely on fixed question numbers, allowing dynamic context prioritization.
+
+Explicit Context Overrides: If the user explicitly mentions context (e.g., "same as the previous event" or "like in question 2"), dynamically locate and use the corresponding previous context based on the user’s input. This ensures that the system adapts to specific user instructions.
+
+Dynamic Context Matching: Match the follow-up query with the most recent context by checking entities, filters, columns, or any relevant details in the User_input, Generated_sql_query, or sql_retrieved_results. If no match is found, traverse backward through the JSON, starting from the most recent question, to find the most relevant previous context.
+
+Prevent Context Mismatch: If the most recent context is irrelevant to the new query (e.g., different tables, columns, or conditions), skip that context and select the next most relevant one from earlier questions. This prevents irrelevant information from affecting the current query processing.
+
+Fallback to Normal Flow for Unmatched Questions: If the new query is completely unrelated to previous questions (e.g., new entities or entirely different topics), ignore prior context and process the query independently. This ensures that only relevant context is applied and avoids incorrect outputs.
