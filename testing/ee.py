@@ -1560,3 +1560,10 @@ and some explanations for the approach like what's the question and steps you ar
 Use user's previous queries and results (user_input, Snowflake_Query, Snowflake_Query_retrieved_results) to provide continuity in follow-up questions. If the current query lacks details but refers to earlier results, incorporate those dynamically into the new query.
 Ensure the system distinguishes follow-up questions from new, unrelated ones. If the new query does not match the previous context, process it as a standalone query using the current metadata and input.
 Validate and adapt details (e.g., tables, columns, filters) from previous context only when relevant, ensuring accuracy and avoiding incorrect assumptions for unrelated questions.
+
+
+
+Incorporate previous query details, such as user_input, Snowflake_Query, and Snowflake_Query_retrieved_results, to ensure seamless continuity between related queries.
+When follow-up queries omit specific details (e.g., columns, filters, or table references), infer and include them from the previous context to maintain consistency with the user's intent.
+Prioritize consistency by merging previous and current queries logically, ensuring missing components (e.g., column names or filter conditions) from the follow-up query are filled based on the previous context.
+If a query appears unrelated to previous context, treat it as a standalone question and process it using normal procedures to avoid inaccurate assumptions.
