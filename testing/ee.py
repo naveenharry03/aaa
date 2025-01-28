@@ -1585,3 +1585,123 @@ Dynamic Context Matching: Match the follow-up query with the most recent context
 Prevent Context Mismatch: If the most recent context is irrelevant to the new query (e.g., different tables, columns, or conditions), skip that context and select the next most relevant one from earlier questions. This prevents irrelevant information from affecting the current query processing.
 
 Fallback to Normal Flow for Unmatched Questions: If the new query is completely unrelated to previous questions (e.g., new entities or entirely different topics), ignore prior context and process the query independently. This ensures that only relevant context is applied and avoids incorrect outputs.
+
+
+
+
+const vscode = require('vscode'); 
+
+/**
+* @param {vscode.ExtensionContext} context
+*/
+function activate(context) {
+    // Display a message when the extension is activated
+    console.log('Congratulations, your extension "POC" is now active!');
+
+    // Register the 'helloWorld' command
+    const disposable = vscode.commands.registerCommand('POC.helloWorld', function () {
+        // Create a Webview Panel
+        const panel = vscode.window.createWebviewPanel(
+            'streamlitHelper', // The view type
+            'Streamlit Helper', // The title of the webview panel
+            vscode.ViewColumn.One, // Editor column to show the webview
+            {
+                enableScripts: true, // Allow running scripts inside the webview
+                localResourceRoots: [vscode.Uri.file(context.extensionPath)] // Allow access to local resources
+            }
+        );
+
+        // HTML content for the webview
+        const htmlContent = `
+            <html>
+            <head>
+                <style>
+                    body { font-family: Arial, sans-serif; padding: 20px; }
+                    h1 { color: #007ACC; }
+                    .form-group { margin-bottom: 15px; }
+                    .btn { padding: 10px 15px; background-color: #007ACC; color: white; border: none; cursor: pointer; }
+                    .btn:hover { background-color: #005F8D; }
+                </style>
+            </head>
+            <body>
+                <h1>Streamlit Helper</h1>
+                <p>Upload a file and fill the details below to generate Streamlit code.</p>
+                <div class="form-group">
+                    <label for="fileInput">Upload your file:</label>
+                    <input type="file" id="fileInput" name="fileInput">
+                </div>
+                <div class="form-group">
+                    <label for="questionInput">Enter some details:</label>
+                    <input type="text" id="questionInput" name="questionInput" placeholder="Type something...">
+                </div>
+                <button class="btn" id="submitBtn">Generate Streamlit Code</button>
+                <div id="output"></div>
+                <script>
+                    const vscode = acquireVsCodeApi();
+                    document.getElementById('submitBtn').onclick = function() {
+                        const fileInput = document.getElementById('fileInput').files[0];
+                        const questionInput = document.getElementById('questionInput').value;
+
+                        if (!fileInput || !questionInput) {
+                            document.getElementById('output').innerText = "Please fill all the fields.";
+                            return;
+                        }
+
+                        // Send data to the extension backend
+                        vscode.postMessage({ type: 'process', file: fileInput.name, question: questionInput });
+                    };
+                </script>
+            </body>
+            </html>
+        `;
+
+        // Set the HTML content of the webview
+        panel.webview.html = htmlContent;
+
+        // Listen for messages from the webview
+        panel.webview.onDidReceiveMessage(
+            message => {
+                if (message.type === 'process') {
+                    // Process the file and question here (backend logic)
+                    const { file, question } = message;
+
+                    // For demonstration, let's generate a basic Streamlit code
+                    const streamlitCode = `
+                        import streamlit as st
+
+                        st.title('Generated Streamlit UI')
+                        st.write('File: ${file}')
+                        st.write('User Input: ${question}')
+                    `;
+
+                    // Send back the Streamlit code to display in the webview
+                    panel.webview.postMessage({ type: 'output', code: streamlitCode });
+                }
+            },
+            undefined,
+            context.subscriptions
+        );
+
+        // Handle output display in the webview
+        panel.webview.onDidReceiveMessage(
+            message => {
+                if (message.type === 'output') {
+                    // Show the generated Streamlit code in the output section
+                    const outputDiv = document.getElementById('output');
+                    outputDiv.innerText = message.code;
+                }
+            }
+        );
+    });
+
+    context.subscriptions.push(disposable);
+}
+
+// Deactivate function (if needed)
+function deactivate() {}
+
+module.exports = {
+    activate,
+    deactivate
+};
+
