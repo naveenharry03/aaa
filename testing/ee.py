@@ -1705,3 +1705,17 @@ module.exports = {
     deactivate
 };
 
+
+
+ID	Name	Age	Height	Weight	Salary	Joining_Date	Department	Height_duplicate
+1	Alice	25	170 cm	70	50000	1/15/2022	HR	170 cm
+2	Bob	30	5.7 ft	154	60000	1/20/2022	IT	5.7 ft
+3	Charlie	35	180 cm	80	55000	2/10/2022	Finance	180 cm
+4	David	40	165 cm	65	58000	15-03-2022	IT	165 cm
+5	Eve		5.5 ft	120	61000		HR	5.5 ft
+6	Frank	50	175 cm	75		6/1/2022	Finance	175 cm
+7	Grace	55	6.1 ft	85	63000	7/10/2022	HR	6.1 ft
+8	Hannah	60	160 cm		65000	8/20/2022	IT	160 cm
+9	Ian	1000	200 cm	95	70000	9/25/2022	Finance	200 cm
+10	Jack	28	5.9 ft	160	5000000	10/11/2022	HR	5.9 ft
+10	Jack	28	5.9 ft	160	5000000	10/11/2022	HR	5.9 ft
