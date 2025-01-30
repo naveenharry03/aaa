@@ -152,3 +152,156 @@ module.exports = {
     activate,
     deactivate
 };
+
+
+```````````````````````````````
+
+const vscode = require('vscode');
+
+function activate(context) {
+    // Register command to show input panel
+    let disposable = vscode.commands.registerCommand('copilot-poc.showInput', () => {
+        // Create and show WebView panel
+        const panel = vscode.window.createWebviewPanel(
+            'copilotPoc',
+            'Copilot POC',
+            vscode.ViewColumn.One,
+            {
+                enableScripts: true
+            }
+        );
+
+        // Set initial HTML content
+        panel.webview.html = getWebviewContent();
+
+        // Handle messages from webview
+        panel.webview.onDidReceiveMessage(async message => {
+            if (message.command === 'getCompletion') {
+                try {
+                    const response = await getCopilotResponse(message.text);
+                    // Send response back to webview
+                    panel.webview.postMessage({ 
+                        command: 'showResponse', 
+                        response: response 
+                    });
+                } catch (error) {
+                    panel.webview.postMessage({ 
+                        command: 'showError', 
+                        error: error.message 
+                    });
+                }
+            }
+        });
+    });
+
+    context.subscriptions.push(disposable);
+}
+
+async function getCopilotResponse(prompt) {
+    // Get Copilot Chat extension
+    const copilotChat = vscode.extensions.getExtension('GitHub.copilot-chat');
+    
+    if (!copilotChat) {
+        throw new Error('GitHub Copilot Chat is not installed');
+    }
+
+    if (!copilotChat.isActive) {
+        await copilotChat.activate();
+    }
+
+    try {
+        // Get the chat API
+        const api = copilotChat.exports;
+        
+        // Create a new chat session
+        const response = await vscode.commands.executeCommand('github.copilot.chat.explain', prompt);
+        
+        return response || 'No response from Copilot';
+    } catch (error) {
+        console.error('Copilot Chat error:', error);
+        throw new Error('Failed to get response from Copilot Chat');
+    }
+}
+
+function getWebviewContent() {
+    return `<!DOCTYPE html>
+    <html>
+        <head>
+            <style>
+                body {
+                    padding: 20px;
+                    font-family: sans-serif;
+                }
+                #input-container {
+                    margin-bottom: 20px;
+                }
+                #prompt-input {
+                    width: 100%;
+                    padding: 8px;
+                    margin-bottom: 10px;
+                }
+                #submit-button {
+                    padding: 8px 16px;
+                    background-color: #007acc;
+                    color: white;
+                    border: none;
+                    cursor: pointer;
+                }
+                #submit-button:hover {
+                    background-color: #005999;
+                }
+                #response-container {
+                    margin-top: 20px;
+                    padding: 10px;
+                    background-color: #f0f0f0;
+                    border-radius: 4px;
+                    white-space: pre-wrap;
+                }
+            </style>
+        </head>
+        <body>
+            <div id="input-container">
+                <textarea id="prompt-input" rows="4" placeholder="Enter your prompt here..."></textarea>
+                <button id="submit-button">Get Copilot Response</button>
+            </div>
+            <div id="response-container"></div>
+
+            <script>
+                const vscode = acquireVsCodeApi();
+                const promptInput = document.getElementById('prompt-input');
+                const submitButton = document.getElementById('submit-button');
+                const responseContainer = document.getElementById('response-container');
+
+                submitButton.addEventListener('click', () => {
+                    const text = promptInput.value;
+                    if (text) {
+                        responseContainer.textContent = 'Getting response from Copilot...';
+                        vscode.postMessage({
+                            command: 'getCompletion',
+                            text: text
+                        });
+                    }
+                });
+
+                window.addEventListener('message', event => {
+                    const message = event.data;
+                    switch (message.command) {
+                        case 'showResponse':
+                            responseContainer.textContent = message.response;
+                            break;
+                        case 'showError':
+                            responseContainer.textContent = 'Error: ' + message.error;
+                            break;
+                    }
+                });
+            </script>
+        </body>
+    </html>`;
+}
+
+function deactivate() {}
+
+module.exports = {
+    activate,
+    deactivate
+};
