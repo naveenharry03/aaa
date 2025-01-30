@@ -480,67 +480,29 @@ module.exports = {
 // extension.js
 const vscode = require('vscode');
 
-function activate(context) {
-    // Register command with proper activation event
-    let disposable = vscode.commands.registerCommand('copilot-poc.showInput', async () => {
-        const panel = vscode.window.createWebviewPanel(
-            'copilotPoc',
-            'Copilot POC',
-            vscode.ViewColumn.One,
-            { enableScripts: true }
-        );
-
-        panel.webview.html = getWebviewContent();
-
-        panel.webview.onDidReceiveMessage(async message => {
-            if (message.command === 'getCompletion') {
-                try {
-                    const response = await getCopilotResponse(message.text);
-                    panel.webview.postMessage({ 
-                        command: 'showResponse', 
-                        response: response 
-                    });
-                } catch (error) {
-                    vscode.window.showErrorMessage(error.message);
-                    panel.webview.postMessage({ 
-                        command: 'showError', 
-                        error: error.message 
-                    });
-                }
-            }
-        });
-    });
-
-    context.subscriptions.push(disposable);
-}
-
 async function getCopilotResponse(prompt) {
     const copilotChat = vscode.extensions.getExtension('GitHub.copilot-chat');
     
     if (!copilotChat) throw new Error('GitHub Copilot Chat is not installed');
     
     try {
+        // Activate the extension if needed
         if (!copilotChat.isActive) {
             await copilotChat.activate();
         }
 
-        // Use the proper chat API method
-        const response = await vscode.commands.executeCommand(
-            'github.copilot.generateCompletions',
-            {
-                prompt,
-                doc: {
-                    language: 'plaintext',
-                    getText: () => prompt
-                }
-            }
-        );
-
-        return response?.completions?.[0]?.text || 'No response from Copilot';
+        // Get the chat API instance
+        const chatApi = copilotChat.exports.chat;
+        
+        // Create a new chat session
+        const session = await chatApi.startSession();
+        
+        // Send message and wait for response
+        const response = await session.sendMessage(prompt);
+        
+        return response?.response ?? 'No response from Copilot';
     } catch (error) {
         console.error('Copilot error:', error);
         throw new Error('Failed to get response: ' + error.message);
     }
 }
-
-// getWebviewContent() remains the same as in original
