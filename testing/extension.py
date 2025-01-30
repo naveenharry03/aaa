@@ -506,3 +506,135 @@ async function getCopilotResponse(prompt) {
         throw new Error('Failed to get response: ' + error.message);
     }
 }
+
+````````````````
+
+const vscode = require('vscode');
+
+function activate(context) {
+    let disposable = vscode.commands.registerCommand('copilot-poc.showInput', () => {
+        const panel = vscode.window.createWebviewPanel(
+            'copilotPoc',
+            'Copilot POC',
+            vscode.ViewColumn.One,
+            {
+                enableScripts: true
+            }
+        );
+
+        panel.webview.html = getWebviewContent();
+
+        panel.webview.onDidReceiveMessage(async (message) => {
+            if (message.command === 'getCompletion') {
+                try {
+                    const response = await getCopilotResponse(message.text);
+                    panel.webview.postMessage({
+                        command: 'showResponse',
+                        response: response
+                    });
+                } catch (error) {
+                    panel.webview.postMessage({
+                        command: 'showError',
+                        error: error.message
+                    });
+                }
+            }
+        });
+    });
+
+    context.subscriptions.push(disposable);
+}
+
+async function getCopilotResponse(prompt) {
+    const copilotChat = vscode.extensions.getExtension('GitHub.copilot-chat');
+
+    if (!copilotChat) {
+        throw new Error('GitHub Copilot Chat is not installed.');
+    }
+
+    if (!copilotChat.isActive) {
+        await copilotChat.activate();
+    }
+
+    try {
+        const api = copilotChat.exports;
+        if (!api || typeof api.ask !== 'function') {
+            throw new Error('Copilot Chat API is not available.');
+        }
+
+        const response = await api.ask(prompt, { source: 'extension' });
+        return response ? response.text : 'No response from Copilot.';
+    } catch (error) {
+        console.error('Error communicating with Copilot Chat:', error);
+        throw new Error('Failed to get response from Copilot Chat.');
+    }
+}
+
+function getWebviewContent() {
+    return `<!DOCTYPE html>
+    <html>
+        <head>
+            <style>
+                body {
+                    font-family: sans-serif;
+                    padding: 20px;
+                }
+                textarea {
+                    width: 100%;
+                    height: 80px;
+                    margin-bottom: 10px;
+                }
+                button {
+                    background-color: #007acc;
+                    color: white;
+                    padding: 10px;
+                    border: none;
+                    cursor: pointer;
+                }
+                button:hover {
+                    background-color: #005999;
+                }
+                #response {
+                    margin-top: 20px;
+                    white-space: pre-wrap;
+                    background-color: #f4f4f4;
+                    padding: 10px;
+                    border-radius: 4px;
+                }
+            </style>
+        </head>
+        <body>
+            <textarea id="prompt" placeholder="Enter your prompt..."></textarea>
+            <button id="submit">Get Copilot Response</button>
+            <div id="response"></div>
+
+            <script>
+                const vscode = acquireVsCodeApi();
+                document.getElementById('submit').addEventListener('click', () => {
+                    const text = document.getElementById('prompt').value;
+                    if (text) {
+                        document.getElementById('response').textContent = 'Fetching response...';
+                        vscode.postMessage({ command: 'getCompletion', text: text });
+                    }
+                });
+
+                window.addEventListener('message', event => {
+                    const message = event.data;
+                    if (message.command === 'showResponse') {
+                        document.getElementById('response').textContent = message.response;
+                    } else if (message.command === 'showError') {
+                        document.getElementById('response').textContent = 'Error: ' + message.error;
+                    }
+                });
+            </script>
+        </body>
+    </html>`;
+}
+
+function deactivate() {}
+
+module.exports = {
+    activate,
+    deactivate
+};
+
