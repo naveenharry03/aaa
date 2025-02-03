@@ -272,3 +272,96 @@ This document provides strict guidelines for GitHub Copilot to generate Streamli
 
 By following these instructions, GitHub Copilot ensures a structured, consistent, and maintainable codebase.
 
+
+   `````````````````````````````````
+
+   1. Understand Directory Structure First
+Before providing any response, GitHub Copilot must analyze the existing directory structure to determine where the requested code should be implemented.
+The structure includes predefined folders such as:
+pages/ - Modular UI pages for Streamlit
+static/ - Stores CSS, images, and JavaScript files
+data/ - Stores .csv and .xlsx files for processing
+core/ - Houses business logic
+api/ - Contains Flask API endpoints
+server.py - Flask backend for handling API calls
+app.py - Streamlit UI entry point
+2. Context-Aware Code Suggestions
+When answering a query, Copilot must consider all aspects of the existing codebase.
+Code should be structured so that API calls between Streamlit and Flask are handled within server.py and routes.py.
+If modifications are needed in multiple files, Copilot must explicitly indicate where changes should be applied.
+3. Strict Adherence to Code Structure
+Any new class, function, or method must strictly follow the format of existing classes and functions.
+The placement of functions should align with their purpose (e.g., API logic inside routes.py, data processing inside core/).
+Docstrings are mandatory for every function and class to ensure readability and maintainability.
+4. API and Backend Integration
+Streamlit must communicate with the Flask backend using requests for REST API calls.
+API routes should be structured inside routes.py, and all business logic should be inside core/.
+Any data fetched via API should be displayed in the UI using st.dataframe() or st.table().
+5. Navigation and UI Components
+The application must use streamlit_option_menu for navigation.
+UI components must align with the organization-approved UI template (color themes, fonts, button styles).
+6. Handling Data Files
+Any data-related operations (loading, processing, storing) must happen within the data/ folder.
+Temporary or processed data should also be stored inside data/.
+Flask should expose endpoints to serve data to Streamlit via API calls.
+7. Strict Boilerplate Code Generation
+Responses must be limited to boilerplate code only, relevant to the specific query.
+Copilot must not generate generic Flask or Streamlit templates but instead use the existing structure as a reference.
+8. Error Handling and Best Practices
+Ensure that all file operations and API calls include proper error handling.
+Implement CORS handling in Flask to avoid cross-origin issues.
+Use try-except blocks for API calls in server.py.
+
+
+
+
+```````````````````
+
+                         Key Instructions for GitHub Copilot
+1. Understand Directory Structure First
+Before providing any response, GitHub Copilot must analyze the existing directory structure to determine where the requested code should be implemented.
+The structure includes predefined folders such as:
+pages/ - Modular UI pages for Streamlit
+static/ - Stores CSS, images, and JavaScript files
+data/ - Stores .csv and .xlsx files for processing
+core/ - Houses business logic
+api/ - Contains Flask API endpoints
+workers.py - Handles background processing tasks with multithreading
+server.py - Flask backend for handling API calls
+app.py - Streamlit UI entry point
+2. Context-Aware Code Suggestions
+When answering a query, Copilot must consider all aspects of the existing codebase.
+Code should be structured so that API calls between Streamlit and Flask are handled within server.py and routes.py.
+If modifications are needed in multiple files, Copilot must explicitly indicate where changes should be applied.
+3. Strict Adherence to Code Structure
+Any new class, function, or method must strictly follow the format of existing classes and functions.
+The placement of functions should align with their purpose (e.g., API logic inside routes.py, data processing inside core/, multithreading logic inside workers.py).
+Docstrings are mandatory for every function and class to ensure readability and maintainability.
+4. API, Backend Integration, and Multithreading
+Streamlit must communicate with the Flask backend using requests for REST API calls.
+API routes should be structured inside routes.py, and all business logic should be inside core/.
+workers.py must handle background tasks using Python’s threading or concurrent.futures.
+The UI must remain responsive while processing API calls asynchronously.
+Long-running processes should be offloaded to background threads or processes.
+5. Navigation and UI Components
+The application must use streamlit_option_menu for navigation.
+UI components must align with the organization-approved UI template (color themes, fonts, button styles).
+6. Handling Data Files
+Any data-related operations (loading, processing, storing) must happen within the data/ folder.
+Temporary or processed data should also be stored inside data/.
+Flask should expose endpoints to serve data to Streamlit via API calls.
+Streamlit should fetch and process data in a non-blocking manner to avoid UI freezes.
+7. Strict Boilerplate Code Generation
+Responses must be limited to boilerplate code only, relevant to the specific query.
+Copilot must not generate generic Flask or Streamlit templates but instead use the existing structure as a reference.
+Any background task must be defined inside workers.py and called properly within the API endpoints.
+8. Error Handling and Best Practices
+Ensure that all file operations and API calls include proper error handling.
+Implement CORS handling in Flask to avoid cross-origin issues.
+Use try-except blocks for API calls in server.py.
+When using multithreading, ensure that shared resources are accessed safely to avoid race conditions.
+Expected Behavior
+GitHub Copilot should only return responses based on the directory structure and pre-defined code standards.
+If a query requires new files or modifications to multiple existing files, Copilot should provide step-by-step implementation guidance.
+Any deviation from the predefined template should be flagged as an error.
+By following these instructions, GitHub Copilot ensures a structured, consistent, and maintainable codebase while leveraging Flask's multithreading capabilities for high-performance applications.
