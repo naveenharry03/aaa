@@ -173,3 +173,55 @@ def function_name(param1: str, param2: Optional[int] = None) -> Dict[str, Any]:
    - Handle coroutines properly
    - Use async context managers
    - Consider thread safety
+
+
+      
+``````````````````````````
+
+      Directory Awareness:
+
+Copilot must recognize the predefined directory structure before generating any code.
+
+It must analyze the existing folder and file purposes before suggesting changes.
+
+When modifying or adding code, it should ensure the update aligns with the correct module.
+
+Code Integration & Context Retention:
+
+All generated responses must align with the entire codebase context.
+
+Instead of providing isolated code snippets, Copilot should suggest exact file locations for implementation.
+
+For any function/class modifications, it must analyze the existing structure and provide updates in the correct location.
+
+Boilerplate Code Standards:
+
+Copilot must follow the pre-defined template style for all functions and classes.
+
+Every class must include an appropriate constructor (__init__) and adhere to existing design patterns.
+
+All functions should include detailed docstrings explaining parameters, return values, and functionality.
+
+New Class & Function Creation Rules:
+
+If a new class is required, it must adhere to the existing class structure.
+
+Function signatures, arguments, and return types should match the overall project conventions.
+
+Any helper functions should be placed inside common/utils.py unless they are core features.
+
+Changes & Enhancements:
+
+When modifying existing files, Copilot must not overwrite unrelated code.
+
+It should add new logic in an incremental manner, ensuring that it seamlessly integrates with current functionality.
+
+If a significant update is required, it should generate a structured explanation along with the new code.
+
+Strict Response Format:
+
+Copilot must return responses only in boilerplate code format.
+
+No additional explanations or unrelated suggestions should be included.
+
+Responses must be fully executable and include inline comments where necessary.
