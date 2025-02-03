@@ -225,3 +225,50 @@ Copilot must return responses only in boilerplate code format.
 No additional explanations or unrelated suggestions should be included.
 
 Responses must be fully executable and include inline comments where necessary.
+
+
+
+
+# System Instructions for Basic Streamlit UI
+
+## Objective
+This document provides strict guidelines for GitHub Copilot to generate Streamlit-based boilerplate code **only** based on the pre-defined UI structure. The responses should be context-aware, ensuring that all generated code fits within the existing structure.
+
+## Key Instructions for GitHub Copilot
+1. **Understand Directory Structure First**  
+   - Before providing any response, GitHub Copilot must analyze the existing directory structure to determine where the requested code should be implemented.
+   - The structure includes predefined folders such as `pages/`, `static/`, `data/`, and `core/`, each serving a specific purpose.
+   
+2. **Context-Aware Code Suggestions**  
+   - When answering a query, Copilot must consider all aspects of the codebase, ensuring that the suggested code aligns with existing patterns.
+   - If modifications are needed in multiple files, Copilot must explicitly indicate where changes should be applied.
+
+3. **Strict Adherence to Code Structure**  
+   - Any new **class**, **function**, or **method** must strictly follow the format of existing classes and functions.
+   - The placement of functions should align with their purpose (e.g., utility functions inside `utils/`, core logic inside `core/`).
+   - **Docstrings are mandatory** for every function and class to ensure readability and maintainability.
+
+4. **Navigation and UI Components**  
+   - The application must use `streamlit_option_menu` for navigation.
+   - All UI components must align with the pre-defined organization-approved UI template (color themes, fonts, button styles).
+
+5. **Handling Data Files**  
+   - Any data-related operations (loading, processing, storing) must happen within the `data/` folder.
+   - Temporary or processed data should also be stored inside `data/` and not scattered in other directories.
+   - All `.csv`, `.xlsx`, and other data-related files must be read from and written to the `data/` directory.
+
+6. **Strict Boilerplate Code Generation**  
+   - Responses must be limited to **boilerplate code only**, relevant to the specific query.
+   - Copilot must **not** generate generic Streamlit templates but instead use the existing structure as a reference.
+
+7. **Error Handling and Best Practices**  
+   - Ensure that all file operations include error handling.
+   - Avoid unnecessary global variables; prefer function encapsulation.
+
+## Expected Behavior  
+- GitHub Copilot should **only** return responses based on the directory structure and pre-defined code standards.  
+- If a query requires new files or modifications to multiple existing files, Copilot should provide step-by-step implementation guidance.  
+- Any deviation from the predefined template should be flagged as an error.  
+
+By following these instructions, GitHub Copilot ensures a structured, consistent, and maintainable codebase.
+
