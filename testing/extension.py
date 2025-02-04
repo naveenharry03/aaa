@@ -795,3 +795,91 @@ exports.activate = activate;
 
 function deactivate() {}
 module.exports = { activate, deactivate };
+
+`````````````
+
+
+const vscode = require("vscode");
+const fs = require("fs");
+const path = require("path");
+
+/**
+ * @param {vscode.ExtensionContext} context
+ */
+function activate(context) {
+  let disposable = vscode.commands.registerCommand(
+    "extension.createProject",
+    async function () {
+      // Ask for Business Requirements file (Mandatory)
+      const businessFileUri = await vscode.window.showOpenDialog({
+        canSelectMany: false,
+        openLabel: "Select Business Requirements File",
+        filters: { "Text Files": ["txt", "md", "docx"], "All Files": ["*"] },
+      });
+
+      if (!businessFileUri || businessFileUri.length === 0) {
+        vscode.window.showErrorMessage("Business Requirements file is required.");
+        return;
+      }
+
+      // Ask for Data Upload file (Optional)
+      const dataFileUri = await vscode.window.showOpenDialog({
+        canSelectMany: false,
+        openLabel: "Select Data Upload File (Optional)",
+        filters: { "CSV Files": ["csv"], "Excel Files": ["xlsx", "xls"], "All Files": ["*"] },
+      });
+
+      // Ask user where to create the project
+      const projectUri = await vscode.window.showOpenDialog({
+        canSelectMany: false,
+        canSelectFiles: false,
+        canSelectFolders: true,
+        openLabel: "Select Project Directory",
+      });
+
+      if (!projectUri || projectUri.length === 0) {
+        vscode.window.showErrorMessage("You must select a project directory.");
+        return;
+      }
+
+      const projectRoot = projectUri[0].fsPath;
+
+      // Define the folder structure
+      const folders = [
+        "src/core",
+        "src/models",
+        "src/services",
+        "src/utils",
+        "src/config",
+        "src/api",
+        "tests",
+        "docs",
+        "scripts",
+      ];
+
+      try {
+        // Create directories
+        folders.forEach((folder) => {
+          const dirPath = path.join(projectRoot, folder);
+          if (!fs.existsSync(dirPath)) {
+            fs.mkdirSync(dirPath, { recursive: true });
+          }
+        });
+
+        vscode.window.showInformationMessage("Project structure created successfully!");
+      } catch (error) {
+        vscode.window.showErrorMessage(`Error creating directories: ${error.message}`);
+      }
+    }
+  );
+
+  context.subscriptions.push(disposable);
+}
+
+function deactivate() {}
+
+module.exports = {
+  activate,
+  deactivate,
+};
+
