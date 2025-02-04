@@ -365,3 +365,84 @@ GitHub Copilot should only return responses based on the directory structure and
 If a query requires new files or modifications to multiple existing files, Copilot should provide step-by-step implementation guidance.
 Any deviation from the predefined template should be flagged as an error.
 By following these instructions, GitHub Copilot ensures a structured, consistent, and maintainable codebase while leveraging Flask's multithreading capabilities for high-performance applications.
+
+
+```````````````````````
+
+                         # Business Requirements Document  
+## Project: Streamlit File Validation and Upload Tool  
+## Version: 1.0  
+## Date: [YYYY-MM-DD]  
+## Author: [Your Name / Team]  
+## Stakeholders: [Architects, Tech Leads, Business Analysts]  
+---------------------------------------------------------------
+
+## 1. Overview  
+The Streamlit File Validation and Upload Tool enables users to upload a `CSV` or `XLSX` file via a Streamlit UI. The tool validates and cleans data before storing it in a Snowflake table. It includes multiple pages for user interaction and automatic processing.
+
+---------------------------------------------------------------
+
+## 2. Functional Requirements  
+
+### 2.1 Streamlit UI Pages  
+- **Home Page:** Displays an introduction to the tool.  
+- **Upload Page:** Allows users to upload files and select the data source.  
+- **Algorithm Page:** Executes data validation and cleaning operations.  
+
+### 2.2 Upload Page Requirements  
+- Users should be able to upload a file (`CSV` or `XLSX`).  
+- A **radio button** should allow users to choose the data source:  
+  - **Option 1:** Upload from local system.  
+  - **Option 2:** Read from Snowflake (`schema.table_name`).  
+- Once uploaded, the file should be displayed in a **pandas DataFrame** format.  
+- The upload page should have a **"Process Data"** button to trigger the validation algorithm.
+
+### 2.3 Algorithm Page (Data Validation & Cleaning)  
+- The uploaded dataset should undergo the following transformations:  
+  1. **Missing Value Handling:**  
+     - If **numerical with outliers** → Fill with `median`.  
+     - If **numerical without outliers** → Fill with `mean`.  
+     - If **categorical** → Fill with `mode`.  
+  2. **Data Type Validation:** Ensure all columns have correct data types.  
+  3. **Range Validation:** Check if numerical columns are within predefined ranges.  
+  4. **Date Validation:** Ensure date fields follow the correct format (`YYYY-MM-DD`).  
+  5. **Duplicate Removal:** Drop duplicate rows from the dataset.  
+  6. **Schema Mapping:** Ensure the cleaned dataset conforms to Snowflake schema before insertion.  
+  7. **Store cleaned data in Snowflake (`schema.table_name`).**  
+
+---------------------------------------------------------------
+
+## 3. Non-Functional Requirements  
+- The UI should be **responsive** and support **drag-and-drop** file uploads.  
+- Data processing should handle files up to **50MB** efficiently.  
+- The tool should be optimized for **fast execution (< 10 sec for 1M rows).**  
+- **Logging and Debugging** mechanisms must be implemented.  
+
+---------------------------------------------------------------
+
+## 4. Error Handling & Logging  
+- Use **try-except** blocks for all functions and log errors in JSON format.  
+- **Validation Logs:**  
+  - If a column has missing values, log `"missing_values": ["column_name"]`.  
+  - If a numerical column exceeds allowed range, log `"out_of_range": ["column_name"]`.  
+  - If an invalid data type is found, log `"invalid_dtype": {"column_name": "expected_type"}`.  
+- **System Logs:**  
+  - Log file read/write errors.  
+  - Log failed Snowflake inserts with error details.  
+
+---------------------------------------------------------------
+
+## 5. Expected Output  
+- Cleaned dataset stored in Snowflake table `schema.table_name`.  
+- Validation errors stored in `logs/validation_log.json`.  
+- Debug logs stored in `logs/debug_log.json`.  
+
+---------------------------------------------------------------
+
+## 6. Future Enhancements  
+- Add support for **Google Drive / S3 uploads**.  
+- Enable **custom validation rules** via UI.  
+- Implement **real-time data streaming** from Snowflake.
+
+---------------------------------------------------------------
+
