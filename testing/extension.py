@@ -638,3 +638,160 @@ module.exports = {
     deactivate
 };
 
+``````````````````
+
+const vscode = require('vscode');
+const path = require('path');
+const fs = require('fs');
+
+function activate(context) {
+  let disposable = vscode.commands.registerCommand('extension.createStructure', () => {
+    const panel = vscode.window.createWebviewPanel(
+      'createStructure',
+      'Create Project Structure',
+      vscode.ViewColumn.One,
+      { enableScripts: true }
+    );
+
+    panel.webview.html = getWebviewContent();
+
+    let businessFilePath = null;
+    let dataFilePath = null;
+
+    panel.webview.onDidReceiveMessage(async (message) => {
+      switch (message.command) {
+        case 'selectBusiness':
+          const businessFile = await vscode.window.showOpenDialog({
+            canSelectMany: false,
+            canSelectFiles: true,
+            openLabel: 'Select Business Requirements'
+          });
+          if (businessFile && businessFile[0]) {
+            businessFilePath = businessFile[0].fsPath;
+            panel.webview.postMessage({
+              command: 'updateBusiness',
+              path: businessFilePath
+            });
+          }
+          break;
+
+        case 'selectData':
+          const dataFile = await vscode.window.showOpenDialog({
+            canSelectMany: false,
+            canSelectFiles: true,
+            openLabel: 'Select Data Upload (Optional)'
+          });
+          if (dataFile && dataFile[0]) {
+            dataFilePath = dataFile[0].fsPath;
+            panel.webview.postMessage({
+              command: 'updateData',
+              path: dataFilePath
+            });
+          }
+          break;
+
+        case 'submit':
+          if (!businessFilePath) {
+            vscode.window.showErrorMessage('Business file is required.');
+            return;
+          }
+
+          const workspaceFolders = vscode.workspace.workspaceFolders;
+          if (!workspaceFolders) {
+            vscode.window.showErrorMessage('Open a workspace first.');
+            return;
+          }
+
+          const workspaceRoot = workspaceFolders[0].uri.fsPath;
+          createDirectoryStructure(workspaceRoot);
+          panel.dispose();
+          break;
+      }
+    });
+  });
+
+  context.subscriptions.push(disposable);
+}
+
+function createDirectoryStructure(workspaceRoot) {
+  const directories = [
+    'src/core',
+    'src/models',
+    'src/services',
+    'src/utils',
+    'src/config',
+    'src/api',
+    'tests',
+    'docs',
+    'scripts'
+  ];
+
+  directories.forEach(dir => {
+    const dirPath = path.join(workspaceRoot, dir);
+    if (!fs.existsSync(dirPath)) {
+      fs.mkdirSync(dirPath, { recursive: true });
+    }
+  });
+
+  vscode.window.showInformationMessage('Directory structure created!');
+}
+
+function getWebviewContent() {
+  return `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <style>
+        .container { padding: 20px; }
+        .input-group { margin: 10px 0; }
+        button { margin: 5px; }
+        #submitBtn { background: #007acc; color: white; border: none; padding: 10px; }
+      </style>
+    </head>
+    <body>
+      <div class="container">
+        <div class="input-group">
+          <strong>Business File (Required):</strong><br/>
+          <button onclick="selectBusiness()">Choose File</button>
+          <span id="businessPath"></span>
+        </div>
+
+        <div class="input-group">
+          <strong>Data File (Optional):</strong><br/>
+          <button onclick="selectData()">Choose File</button>
+          <span id="dataPath"></span>
+        </div>
+
+        <button id="submitBtn" onclick="submit()">Create Structure</button>
+      </div>
+
+      <script>
+        function selectBusiness() {
+          vscode.postMessage({ command: 'selectBusiness' });
+        }
+
+        function selectData() {
+          vscode.postMessage({ command: 'selectData' });
+        }
+
+        function submit() {
+          vscode.postMessage({ command: 'submit' });
+        }
+
+        window.addEventListener('message', event => {
+          if (event.data.command === 'updateBusiness') {
+            document.getElementById('businessPath').textContent = event.data.path;
+          } else if (event.data.command === 'updateData') {
+            document.getElementById('dataPath').textContent = event.data.path;
+          }
+        });
+      </script>
+    </body>
+    </html>
+  `;
+}
+
+exports.activate = activate;
+
+function deactivate() {}
+module.exports = { activate, deactivate };
