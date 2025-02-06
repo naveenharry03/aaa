@@ -1331,3 +1331,93 @@ export function activate(context: vscode.ExtensionContext): void {
 }
 
 export function deactivate(): void {}
+
+
+```````````````````````````
+
+import * as vscode from 'vscode';
+import * as fs from 'fs';
+
+export function activate(context: vscode.ExtensionContext) {
+  // Register chat participant
+  const chatParticipant = vscode.chat.createChatParticipant('vscode-snowflake-accelerator', async (request, context, response, token) => {
+    try {
+      const userQuery = request.prompt;
+      
+      // Get uploaded files from the chat context
+      const uploadedFiles = context.files || [];
+      
+      // Process uploaded files
+      const fileContents: { [key: string]: string } = {};
+      for (const file of uploadedFiles) {
+        try {
+          // Read file contents using the VS Code API
+          const document = await vscode.workspace.openTextDocument(file.uri);
+          fileContents[file.name] = document.getText();
+        } catch (error) {
+          response.markdown(`Error reading file ${file.name}: ${error.message}`);
+          return;
+        }
+      }
+
+      // Read the default markdown instructions
+      const markdownFilePath = '/Users/a854236/Music/extension/vscode-snowflake-accelerator/src/streamlit_instructions.md';
+      let markdownContent = '';
+      try {
+        markdownContent = fs.readFileSync(markdownFilePath, 'utf8');
+      } catch (error) {
+        response.markdown(`Error reading instructions file: ${error.message}`);
+        return;
+      }
+
+      // Select chat model
+      const chatModels = await vscode.chat.selectChatModels({ 'vendor': 'copilot', 'family': 'gpt-4' });
+      if (!chatModels || chatModels.length === 0) {
+        response.markdown('Sorry, no compatible chat models found.');
+        return;
+      }
+
+      // Prepare messages array with uploaded file contents
+      const messages = [
+        vscode.chat.createChatMessage('system', 
+          "You are an expert in generating boilerplate code for Streamlit Applications based on business requirements uploaded in a text file! " +
+          "Think carefully and step by step like a streamlit expert would. Your job is to generate the directory structure along with the " +
+          "boilerplate code. Always start your response by stating what concept you are explaining. Always include code samples."
+        ),
+        vscode.chat.createChatMessage('system', 
+          "Go through the contents of the markdown file so that you can get a gist of how we are building streamlit applications and " +
+          "what coding practices we are adopting for our projects."
+        ),
+        vscode.chat.createChatMessage('system', `The markdown file is as follows: ${markdownContent}`),
+      ];
+
+      // Add uploaded file contents to the messages
+      for (const [fileName, content] of Object.entries(fileContents)) {
+        messages.push(
+          vscode.chat.createChatMessage('user', 
+            `Contents of uploaded file ${fileName}:\n\n${content}`
+          )
+        );
+      }
+
+      // Add the user's query
+      messages.push(vscode.chat.createChatMessage('user', userQuery));
+
+      // Send request to chat model
+      const chatRequest = await chatModels[0].sendRequest(messages, undefined, token);
+      
+      // Stream the response
+      for await (const chunk of chatRequest.text) {
+        response.markdown(chunk);
+      }
+
+    } catch (error) {
+      response.markdown(`An error occurred: ${error.message}`);
+    }
+  });
+
+  // Register the chat participant with the extension's subscriptions
+  context.subscriptions.push(chatParticipant);
+}
+
+export function deactivate() {}
