@@ -446,3 +446,39 @@ The Streamlit File Validation and Upload Tool enables users to upload a `CSV` or
 
 ---------------------------------------------------------------
 
+import jwt
+import time
+
+# Replace these with your GitHub App details
+APP_ID = "YOUR_APP_ID"
+PRIVATE_KEY_PATH = "path/to/your-private-key.pem"
+
+# Read the private key
+with open(PRIVATE_KEY_PATH, "r") as f:
+    private_key = f.read()
+
+# Generate JWT
+payload = {
+    "iat": int(time.time()),  # Issued at
+    "exp": int(time.time()) + (10 * 60),  # Expires in 10 minutes
+    "iss": APP_ID,  # App ID
+}
+jwt_token = jwt.encode(payload, private_key, algorithm="RS256")
+
+print("JWT Token:", jwt_token)
+
+
+
+
+   curl -X GET "https://api.github.com/app/installations" \
+     -H "Authorization: Bearer YOUR_JWT_TOKEN" \
+     -H "Accept: application/vnd.github+json"
+
+
+   curl -X POST "https://api.github.com/app/installations/12345678/access_tokens" \
+     -H "Authorization: Bearer YOUR_JWT_TOKEN" \
+     -H "Accept: application/vnd.github+json"
+
+   curl -X GET "https://api.github.com/installation/repositories" \
+     -H "Authorization: Bearer ghs_ABC123..." \
+     -H "Accept: application/vnd.github+json"
