@@ -1127,3 +1127,207 @@ export function activate(context: vscode.ExtensionContext): void {
 
 export function deactivate(): void {}
 
+`````````````````````````````````````````````````````
+
+
+import * as vscode from 'vscode';
+import * as fs from 'fs';
+import * as path from 'path';
+import axios from 'axios'; // Make sure to install axios
+
+interface ThreadResponse {
+    thread_id: string;
+    thread: {
+        id: string;
+        name: string;
+        repoID: number;
+        repoOwnerID: number;
+        createdAt: string;
+        updatedAt: string;
+    };
+}
+
+interface MessageResponse {
+    message: {
+        id: string;
+        threadID: string;
+        turnID: string;
+        role: string;
+        content: string;
+        createdAt: string;
+        intent: 'cli-explain' | 'cli-suggest';
+        references: any[];
+    };
+}
+
+class CopilotAPI {
+    private static readonly BASE_URL = 'https://api.githubcopilot.com/github/chat';
+
+    static async createThread(): Promise<ThreadResponse> {
+        try {
+            const response = await axios.post(`${this.BASE_URL}/threads`, {});
+            return response.data;
+        } catch (error) {
+            throw new Error(`Failed to create thread: ${error}`);
+        }
+    }
+
+    static async sendMessage(
+        threadUuid: string,
+        content: string,
+        intent: 'cli-explain' | 'cli-suggest',
+        program: string
+    ): Promise<MessageResponse> {
+        try {
+            const response = await axios.post(
+                `${this.BASE_URL}/threads/${threadUuid}/messages`,
+                {
+                    content,
+                    intent,
+                    references: [
+                        {
+                            type: 'cli-command',
+                            program
+                        }
+                    ]
+                }
+            );
+            return response.data;
+        } catch (error) {
+            throw new Error(`Failed to send message: ${error}`);
+        }
+    }
+}
+
+export function activate(context: vscode.ExtensionContext): void {
+    const disposable = vscode.commands.registerCommand(
+        'extension.createProject',
+        async function () {
+            try {
+                // Initialize Copilot thread
+                const thread = await CopilotAPI.createThread();
+                
+                // Ask for Business Requirements file (Mandatory)
+                const businessFileUri = await vscode.window.showOpenDialog({
+                    canSelectMany: false,
+                    openLabel: 'Select Business Requirements File',
+                    filters: { 'Text Files': ['txt'], 'All Files': [''] },
+                });
+
+                if (!businessFileUri || businessFileUri.length === 0) {
+                    vscode.window.showErrorMessage('Business Requirements file is required.');
+                    return;
+                }
+
+                // Read business requirements file content
+                const businessReqContent = fs.readFileSync(businessFileUri[0].fsPath, 'utf8');
+                
+                // Send business requirements to Copilot for suggestions
+                const suggestResponse = await CopilotAPI.sendMessage(
+                    thread.thread_id,
+                    businessReqContent,
+                    'cli-suggest',
+                    'project-structure'
+                );
+
+                // Ask for Data Upload file (Optional)
+                const dataFileUri = await vscode.window.showOpenDialog({
+                    canSelectMany: false,
+                    openLabel: 'Select Data Upload File (Optional)',
+                    filters: { 'CSV Files': ['csv'], 'All Files': ['*'] },
+                });
+
+                // Ask user where to create the project
+                const projectUri = await vscode.window.showOpenDialog({
+                    canSelectMany: false,
+                    canSelectFiles: false,
+                    canSelectFolders: true,
+                    openLabel: 'Select Project Directory',
+                });
+
+                if (!projectUri || projectUri.length === 0) {
+                    vscode.window.showErrorMessage('You must select a project directory.');
+                    return;
+                }
+
+                const projectRoot = projectUri[0].fsPath;
+
+                // Define the folder structure
+                const folders: string[] = [
+                    '.vscode',
+                    'images',
+                    'static',
+                    'pages',
+                    'src/core',
+                    'src/utils',
+                    'src/config',
+                    'tests',
+                    'docs',
+                    'data',
+                ];
+
+                // Create directories
+                folders.forEach((folder: string) => {
+                    const dirPath = path.join(projectRoot, folder);
+                    if (!fs.existsSync(dirPath)) {
+                        fs.mkdirSync(dirPath, { recursive: true });
+                    }
+                });
+
+                // Copy uploaded Business Requirement file to 'data/' directory
+                const businessFilePath = path.join(projectRoot, 'data', 'business_requirement.txt');
+                fs.copyFileSync(businessFileUri[0].fsPath, businessFilePath);
+
+                // If Data file is uploaded, copy it too
+                if (dataFileUri && dataFileUri.length > 0) {
+                    const dataFilePath = path.join(projectRoot, 'data', 'data.csv');
+                    fs.copyFileSync(dataFileUri[0].fsPath, dataFilePath);
+
+                    // Send data file analysis request to Copilot
+                    await CopilotAPI.sendMessage(
+                        thread.thread_id,
+                        'Analyze data structure and suggest schema',
+                        'cli-explain',
+                        'data-analysis'
+                    );
+                }
+
+                // Predefined files stored in extension's storage
+                const extensionMediaPath = context.extensionPath;
+
+                // Copy predefined files from extension storage
+                const predefinedFiles: { src: string; dest: string }[] = [
+                    { src: 'media/streamlit_instructions.md', dest: 'streamlit_instructions.md' },
+                    { src: 'media/.vscode/settings.json', dest: '.vscode/settings.json' },
+                    { src: 'media/static/style.css', dest: 'static/style.css' },
+                ];
+
+                predefinedFiles.forEach(({ src, dest }: { src: string; dest: string }) => {
+                    const srcPath = path.join(extensionMediaPath, src);
+                    const destPath = path.join(projectRoot, dest);
+
+                    if (fs.existsSync(srcPath)) {
+                        fs.copyFileSync(srcPath, destPath);
+                    }
+                });
+
+                // Create empty files
+                const emptyFiles: string[] = ['app.py', 'requirements.txt', '.env'];
+                emptyFiles.forEach((file: string) => {
+                    const filePath = path.join(projectRoot, file);
+                    if (!fs.existsSync(filePath)) {
+                        fs.writeFileSync(filePath, '');
+                    }
+                });
+
+                vscode.window.showInformationMessage('Project structure created successfully!');
+            } catch (error) {
+                vscode.window.showErrorMessage(`Error: ${(error as Error).message}`);
+            }
+        }
+    );
+
+    context.subscriptions.push(disposable);
+}
+
+export function deactivate(): void {}
