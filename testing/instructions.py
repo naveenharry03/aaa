@@ -482,3 +482,6 @@ print("JWT Token:", jwt_token)
    curl -X GET "https://api.github.com/installation/repositories" \
      -H "Authorization: Bearer ghs_ABC123..." \
      -H "Accept: application/vnd.github+json"
+
+
+   https://gist.github.com/0xdevalias/420657a20dfa17536205e5cb4dfef609#creating-chat-threads
