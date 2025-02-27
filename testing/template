@@ -1,0 +1,48 @@
+# src/utils/decorators.py
+from functools import wraps
+from flask import request, jsonify
+
+def auth_required(f):
+    """
+    Generic authentication decorator
+    Implement your authentication verification logic
+    """
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        # Placeholder for authentication verification
+        # Implement your auth token/session validation logic
+        auth_header = request.headers.get('Authorization')
+        if not auth_header:
+            return jsonify({'message': 'Authentication required'}), 401
+
+        try:
+            # Placeholder: Verify authentication and get user
+            # Replace with your authentication mechanism
+            current_user = None  # Implement user retrieval based on auth
+            if not current_user:
+                return jsonify({'message': 'Invalid authentication'}), 401
+            return f(current_user, *args, **kwargs)
+        except Exception as e:
+            return jsonify({'message': 'Authentication failed'}), 401
+
+    return decorated
+
+def permission_required(permission):
+    """
+    Generic permission decorator
+    Args:
+        permission: Required permission/role
+    """
+    def decorator(f):
+        @wraps(f)
+        def decorated(*args, **kwargs):
+            # Placeholder for permission verification
+            # Implement your authorization logic
+            try:
+                # Verify user permissions/roles
+                pass
+            except Exception as e:
+                return jsonify({'message': 'Permission denied'}), 403
+            return f(*args, **kwargs)
+        return decorated
+    return decorator
