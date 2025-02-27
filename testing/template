@@ -146,3 +146,31 @@ def update_profile(current_user):
     data = request.get_json()
     result = user_service.update_user(current_user['id'], data)
     return jsonify(result)
+
+
+
+flask_api/
+│
+├── src/
+│   ├── config/
+│   │   ├── __init__.py
+│   │   └── settings.py
+│   │
+│   ├── routes/
+│   │   ├── __init__.py
+│   │   ├── user_routes.py
+│   │   └── admin_routes.py
+│   │
+│   ├── services/
+│   │   ├── __init__.py
+│   │   ├── user_service.py
+│   │   └── admin_service.py
+│   │
+│   └── utils/
+│       ├── __init__.py
+│       ├── app_init.py
+│       ├── decorators.py
+│       └── exceptions.py
+│
+├── api.py
+└── requirements.txt
