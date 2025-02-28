@@ -180,213 +180,344 @@ import re
 import json
 import xml.dom.minidom
 import xml.etree.ElementTree as ET
-from pathlib import Path
+import os
 
-def parse_markdown_to_json(markdown_file_path):
-    """
-    Parse the Markdown file into a JSON structure.
-    """
-    with open(markdown_file_path, 'r', encoding='utf-8') as file:
-        content = file.read()
+def read_markdown_file(file_path):
+    """Read the markdown file content."""
+    with open(file_path, 'r', encoding='utf-8') as file:
+        return file.read()
 
-    # Initialize the JSON structure
-    brd = {
-        "ProjectInformation": {},
-        "Overview": {},
-        "FunctionalRequirements": {
-            "MenuTitle": "",
-            "StreamlitUIPages": []
-        },
-        "LibrariesToUse": []
+def parse_markdown_to_dict(markdown_content):
+    """Parse markdown content to a structured dictionary."""
+    lines = markdown_content.split('\n')
+    brd_dict = {
+        "BusinessRequirementsDocument": {
+            "FunctionalRequirements": {
+                "StreamlituIPages": {
+                    "Page": []
+                }
+            },
+            "LibrariesToUse": {
+                "Library": []
+            }
+        }
     }
 
-    # Extract Project Information
-    project_info_match = re.search(r'## Project Information(.*?)##', content, re.DOTALL)
-    if project_info_match:
-        project_info = project_info_match.group(1)
+    current_section = None
+    current_subsection = None
+    current_page = None
+    current_requirement = None
+    in_libraries = False
 
-        project_name_match = re.search(r'\*\*Project Name\*\*: (.*?)$', project_info, re.MULTILINE)
-        if project_name_match:
-            brd["ProjectInformation"]["ProjectName"] = project_name_match.group(1).strip()
-
-        version_match = re.search(r'\*\*Version\*\*: (.*?)$', project_info, re.MULTILINE)
-        if version_match:
-            brd["ProjectInformation"]["Version"] = version_match.group(1).strip()
-
-        date_match = re.search(r'\*\*Date\*\*: (.*?)$', project_info, re.MULTILINE)
-        if date_match:
-            brd["ProjectInformation"]["Date"] = date_match.group(1).strip()
-
-        author_match = re.search(r'\*\*Author\*\*: (.*?)$', project_info, re.MULTILINE)
-        if author_match:
-            brd["ProjectInformation"]["Author"] = author_match.group(1).strip()
-
-        stakeholders_match = re.search(r'\*\*Stakeholders\*\*: (.*?)$', project_info, re.MULTILINE)
-        if stakeholders_match:
-            brd["ProjectInformation"]["Stakeholders"] = stakeholders_match.group(1).strip()
-
-    # Extract Overview
-    overview_match = re.search(r'## Overview(.*?)##', content, re.DOTALL)
-    if overview_match:
-        overview = overview_match.group(1)
-
-        description_match = re.search(r'\*\*Description\*\*: (.*?)$', overview, re.MULTILINE)
-        if description_match:
-            brd["Overview"]["Description"] = description_match.group(1).strip()
-
-    # Extract Menu Title
-    menu_title_match = re.search(r'\*\*Menu Title\*\*: (.*?)$', content, re.MULTILINE)
-    if menu_title_match:
-        brd["FunctionalRequirements"]["MenuTitle"] = menu_title_match.group(1).strip()
-
-    # Extract Streamlit UI Pages
-    page_sections = re.findall(r'#### Page \d+: (.*?)(?=#### Page \d+:|#### Additional Pages|## Libraries)', content, re.DOTALL)
-    additional_pages_match = re.search(r'#### Additional Pages \(Optional\)(.*?)## Libraries', content, re.DOTALL)
-
-    if additional_pages_match:
-        additional_pages = additional_pages_match.group(1)
-        additional_page_sections = re.findall(r'\*\*Page Name\*\*: (.*?)(?=\*\*Page Name\*\*:|$)', additional_pages, re.DOTALL)
-        page_sections.extend(additional_page_sections)
-
-    for page_section in page_sections:
-        if not page_section.strip() or "[No additional pages for this example]" in page_section:
+    for line in lines:
+        line = line.strip()
+        if not line:
             continue
 
-        page = {}
+        # Main sections (h1 or h2)
+        if line.startswith('# '):
+            current_section = line[2:].strip()
+            current_subsection = None
+            current_page = None
+            current_requirement = None
+            in_libraries = False
 
-        # Extract page name
-        page_name_match = re.search(r'^(.*?)$', page_section, re.MULTILINE)
-        if page_name_match:
-            page["Name"] = page_name_match.group(1).strip()
+        # Subsections (h2)
+        elif line.startswith('## '):
+            current_subsection = line[3:].strip()
+            current_page = None
+            current_requirement = None
+            in_libraries = False
 
-        # Extract description
-        description_match = re.search(r'\*\*Description\*\*: (.*?)$', page_section, re.MULTILINE)
-        if description_match:
-            page["Description"] = description_match.group(1).strip()
+            if current_subsection == "Project":
+                brd_dict["BusinessRequirementsDocument"]["Project"] = ""
+            elif current_subsection == "Version":
+                brd_dict["BusinessRequirementsDocument"]["Version"] = ""
+            elif current_subsection == "Date":
+                brd_dict["BusinessRequirementsDocument"]["Date"] = ""
+            elif current_subsection == "Author":
+                brd_dict["BusinessRequirementsDocument"]["Author"] = ""
+            elif current_subsection == "Stakeholders":
+                brd_dict["BusinessRequirementsDocument"]["Stakeholders"] = ""
+            elif current_subsection == "Overview":
+                brd_dict["BusinessRequirementsDocument"]["Overview"] = {"Description": ""}
+            elif current_subsection == "Functional Requirements":
+                current_subsection = "FunctionalRequirements"
+            elif current_subsection == "Libraries to Use":
+                in_libraries = True
 
-        # Extract requirements
-        requirements_section = re.search(r'\*\*Requirements\*\*:(.*?)(?=#### Page \d+:|#### Additional Pages|## Libraries|$)', page_section, re.DOTALL)
-        if requirements_section:
-            requirements_text = requirements_section.group(1)
-            requirements = []
+        # Sub-subsections (h3)
+        elif line.startswith('### '):
+            subsub_section = line[4:].strip()
+            if current_subsection == "FunctionalRequirements":
+                if subsub_section == "Menu Title":
+                    brd_dict["BusinessRequirementsDocument"]["FunctionalRequirements"]["MenuTitle"] = ""
+                elif subsub_section == "Streamlit UI Pages":
+                    current_subsection = "StreamlituIPages"
 
-            # Find all requirements
-            requirement_blocks = re.findall(r'- \*\*Requirement\*\*: (.*?)(?=- \*\*Requirement\*\*:|$)', requirements_text, re.DOTALL)
+        # Sub-sub-subsections (h4)
+        elif line.startswith('#### '):
+            page_name = line[5:].strip()
+            if current_subsection == "StreamlituIPages":
+                current_page = {
+                    "Name": page_name,
+                    "Description": "",
+                    "Requirements": []
+                }
+                brd_dict["BusinessRequirementsDocument"]["FunctionalRequirements"]["StreamlituIPages"]["Page"].append(current_page)
+                current_requirement = None
 
-            for req_block in requirement_blocks:
-                requirement = {}
+        # Content lines
+        elif line.startswith('- **') and line.endswith('**'):
+            # Extract content between ** markers
+            content = line[3:-2].strip()
+            key_value = content.split('**: ', 1)
 
-                # Extract the requirement text (first line)
-                req_text_match = re.search(r'^(.*?)(?=\n|$)', req_block.strip(), re.MULTILINE)
-                if req_text_match:
-                    requirement["Requirement"] = req_text_match.group(1).strip()
+            if len(key_value) == 2:
+                key, value = key_value
 
-                # Extract conditions
-                condition_matches = re.findall(r'- \*\*Condition \(Optional\)\*\*: (.*?)$', req_block, re.MULTILINE)
+                if current_subsection == "Project" and key == "PO Upload Web Application":
+                    brd_dict["BusinessRequirementsDocument"]["Project"] = value
+                elif current_subsection == "Version" and key == "1.0":
+                    brd_dict["BusinessRequirementsDocument"]["Version"] = value
+                elif current_subsection == "Date" and key == "2025-02-19":
+                    brd_dict["BusinessRequirementsDocument"]["Date"] = value
+                elif current_subsection == "Author":
+                    brd_dict["BusinessRequirementsDocument"]["Author"] = value
+                elif current_subsection == "Stakeholders":
+                    brd_dict["BusinessRequirementsDocument"]["Stakeholders"] = value
+                elif current_subsection == "Overview" and key == "Description":
+                    brd_dict["BusinessRequirementsDocument"]["Overview"]["Description"] = value
+                elif current_subsection == "FunctionalRequirements" and key == "PO Validations":
+                    brd_dict["BusinessRequirementsDocument"]["FunctionalRequirements"]["MenuTitle"] = value
+                elif current_page is not None and key == "Description":
+                    current_page["Description"] = value
 
-                if condition_matches:
-                    conditions = []
-                    for condition in condition_matches:
-                        if condition.strip() and "[No conditions for this requirement]" not in condition:
-                            conditions.append({"Condition": condition.strip()})
+        # Requirements (bullet points)
+        elif line.startswith('- ') and current_page is not None:
+            requirement_text = line[2:].strip()
+            if not requirement_text.startswith('**'):  # Skip metadata lines
+                requirement = {"Requirement": requirement_text, "Conditions": []}
+                current_page["Requirements"].append(requirement)
+                current_requirement = requirement
 
-                    if conditions:
-                        requirement["Conditions"] = conditions
+        # Conditions (sub-bullet points)
+        elif line.startswith('    - ') and current_requirement is not None:
+            condition_text = line[6:].strip()
+            current_requirement["Conditions"].append(condition_text)
 
-                requirements.append(requirement)
+        # Libraries
+        elif line.startswith('- `') and in_libraries:
+            library = line[3:].strip().strip('`')
+            brd_dict["BusinessRequirementsDocument"]["LibrariesToUse"]["Library"].append(library)
 
-            page["Requirements"] = requirements
+    # Post-processing: fix the structure for pages and requirements
+    pages = brd_dict["BusinessRequirementsDocument"]["FunctionalRequirements"]["StreamlituIPages"]["Page"]
+    for page in pages:
+        requirements_list = []
+        for req in page["Requirements"]:
+            requirement_dict = {"Requirement": req["Requirement"]}
+            if req["Conditions"]:
+                conditions_list = []
+                for condition in req["Conditions"]:
+                    conditions_list.append({"Condition": condition})
+                requirement_dict["Conditions"] = conditions_list
+            requirements_list.append(requirement_dict)
+        page["Requirements"] = {"Requirement": requirements_list}
 
-        brd["FunctionalRequirements"]["StreamlitUIPages"].append(page)
+    return brd_dict
 
-    # Extract Libraries to Use
-    libraries_match = re.search(r'## Libraries to Use(.*?)$', content, re.DOTALL)
-    if libraries_match:
-        libraries = libraries_match.group(1)
-        library_matches = re.findall(r'- \*\*Library \d+\*\*: (.*?)$', libraries, re.MULTILINE)
-
-        for library in library_matches:
-            if library.strip() and "[Add more libraries as needed]" not in library:
-                brd["LibrariesToUse"].append(library.strip())
-
-    return brd
-
-def json_to_xml(json_data):
-    """
-    Convert the JSON structure to XML.
-    """
+def dict_to_xml(dict_data):
+    """Convert dictionary to XML."""
     root = ET.Element("BusinessRequirementsDocument")
 
-    # Project Information
-    project_info = ET.SubElement(root, "ProjectInformation")
-    for key, value in json_data["ProjectInformation"].items():
-        ET.SubElement(project_info, key).text = value
+    # Add simple elements
+    for key in ["Project", "Version", "Date", "Author", "Stakeholders"]:
+        if key in dict_data["BusinessRequirementsDocument"]:
+            element = ET.SubElement(root, key)
+            element.text = dict_data["BusinessRequirementsDocument"][key]
 
-    # Overview
-    overview = ET.SubElement(root, "Overview")
-    for key, value in json_data["Overview"].items():
-        ET.SubElement(overview, key).text = value
+    # Add Overview
+    if "Overview" in dict_data["BusinessRequirementsDocument"]:
+        overview = ET.SubElement(root, "Overview")
+        description = ET.SubElement(overview, "Description")
+        description.text = dict_data["BusinessRequirementsDocument"]["Overview"]["Description"]
 
-    # Functional Requirements
-    func_reqs = ET.SubElement(root, "FunctionalRequirements")
-    ET.SubElement(func_reqs, "MenuTitle").text = json_data["FunctionalRequirements"]["MenuTitle"]
+    # Add Functional Requirements
+    if "FunctionalRequirements" in dict_data["BusinessRequirementsDocument"]:
+        func_reqs = ET.SubElement(root, "FunctionalRequirements")
 
-    # Streamlit UI Pages
-    pages = ET.SubElement(func_reqs, "StreamlitUIPages")
+        # Add Menu Title
+        if "MenuTitle" in dict_data["BusinessRequirementsDocument"]["FunctionalRequirements"]:
+            menu_title = ET.SubElement(func_reqs, "MenuTitle")
+            menu_title.text = dict_data["BusinessRequirementsDocument"]["FunctionalRequirements"]["MenuTitle"]
 
-    for page_data in json_data["FunctionalRequirements"]["StreamlitUIPages"]:
-        page = ET.SubElement(pages, "Page")
-        ET.SubElement(page, "Name").text = page_data.get("Name", "")
-        ET.SubElement(page, "Description").text = page_data.get("Description", "")
+        # Add Streamlit UI Pages
+        if "StreamlituIPages" in dict_data["BusinessRequirementsDocument"]["FunctionalRequirements"]:
+            ui_pages = ET.SubElement(func_reqs, "StreamlituIPages")
 
-        # Requirements
-        requirements = ET.SubElement(page, "Requirements")
+            # Add Pages
+            for page_data in dict_data["BusinessRequirementsDocument"]["FunctionalRequirements"]["StreamlituIPages"]["Page"]:
+                page = ET.SubElement(ui_pages, "Page")
 
-        for req_data in page_data.get("Requirements", []):
-            requirement = ET.SubElement(requirements, "Requirement")
-            requirement.text = req_data.get("Requirement", "")
+                # Add Page Name
+                name = ET.SubElement(page, "Name")
+                name.text = page_data["Name"]
 
-            # Conditions
-            if "Conditions" in req_data and req_data["Conditions"]:
-                for condition_data in req_data["Conditions"]:
-                    condition = ET.SubElement(requirement, "Condition")
-                    condition.text = condition_data.get("Condition", "")
+                # Add Page Description
+                description = ET.SubElement(page, "Description")
+                description.text = page_data["Description"]
 
-    # Libraries to Use
-    libraries = ET.SubElement(root, "LibrariesToUse")
-    for lib in json_data["LibrariesToUse"]:
-        ET.SubElement(libraries, "Library").text = lib
+                # Add Requirements
+                requirements = ET.SubElement(page, "Requirements")
+
+                for req_data in page_data["Requirements"]["Requirement"]:
+                    requirement = ET.SubElement(requirements, "Requirement")
+                    requirement.text = req_data["Requirement"]
+
+                    # Add Conditions if present
+                    if "Conditions" in req_data:
+                        for condition_data in req_data["Conditions"]:
+                            condition = ET.SubElement(requirement, "Condition")
+                            condition.text = condition_data["Condition"]
+
+    # Add Libraries to Use
+    if "LibrariesToUse" in dict_data["BusinessRequirementsDocument"]:
+        libraries = ET.SubElement(root, "LibrariesToUse")
+
+        for lib in dict_data["BusinessRequirementsDocument"]["LibrariesToUse"]["Library"]:
+            library = ET.SubElement(libraries, "Library")
+            library.text = lib
 
     # Convert to string and pretty print
     rough_string = ET.tostring(root, 'utf-8')
     reparsed = xml.dom.minidom.parseString(rough_string)
-    return reparsed.toprettyxml(indent="  ")
+    return reparsed.toprettyxml(indent="\t")
 
 def main():
-    # Get the input file path
-    markdown_file_path = input("Enter the path to the Markdown file: ")
+    # Find the BRD markdown file in the current directory
+    brd_files = [f for f in os.listdir('.') if f.endswith('.md') and 'BRD' in f.upper()]
 
-    try:
-        # Parse Markdown to JSON
-        json_data = parse_markdown_to_json(markdown_file_path)
+    if not brd_files:
+        print("No BRD markdown file found in the current directory.")
+        return
 
-        # Save JSON to file
-        json_file_path = Path(markdown_file_path).with_suffix('.json')
-        with open(json_file_path, 'w', encoding='utf-8') as f:
-            json.dump(json_data, f, indent=2)
-        print(f"JSON file saved to: {json_file_path}")
+    brd_file = brd_files[0]
+    print(f"Processing {brd_file}...")
 
-        # Convert JSON to XML
-        xml_content = json_to_xml(json_data)
+    # Read markdown content
+    markdown_content = read_markdown_file(brd_file)
 
-        # Save XML to file
-        xml_file_path = Path(markdown_file_path).with_suffix('.xml')
-        with open(xml_file_path, 'w', encoding='utf-8') as f:
-            f.write(xml_content)
-        print(f"XML file saved to: {xml_file_path}")
+    # Parse markdown to dictionary
+    brd_dict = parse_markdown_to_dict(markdown_content)
 
-    except Exception as e:
-        print(f"An error occurred: {e}")
+    # Save JSON file
+    json_file = brd_file.replace('.md', '.json')
+    with open(json_file, 'w', encoding='utf-8') as f:
+        json.dump(brd_dict, f, indent=2)
+    print(f"JSON file saved as {json_file}")
+
+    # Convert dictionary to XML
+    xml_content = dict_to_xml(brd_dict)
+
+    # Save XML file
+    xml_file = brd_file.replace('.md', '.xml')
+    with open(xml_file, 'w', encoding='utf-8') as f:
+        f.write(xml_content)
+    print(f"XML file saved as {xml_file}")
 
 if __name__ == "__main__":
     main()
+
+# Created/Modified files during execution:
+# BRD.json
+# BRD.xml
+
+
+
+
+``````````````````````````````
+
+import json
+import xml.etree.ElementTree as ET
+import os
+import markdown
+from bs4 import BeautifulSoup
+
+def read_markdown_file(file_path):
+    with open(file_path, 'r', encoding='utf-8') as file:
+        return file.read()
+
+def markdown_to_json(md_content):
+    html_content = markdown.markdown(md_content)
+    soup = BeautifulSoup(html_content, "html.parser")
+    
+    json_data = {}
+    current_section = None
+    pages = []
+    
+    for element in soup.find_all(['h1', 'h2', 'h3', 'ul', 'li']):
+        if element.name == 'h1':
+            json_data['BusinessRequirementsDocument'] = {}
+        elif element.name == 'h2':
+            current_section = element.text.strip()
+            json_data['BusinessRequirementsDocument'][current_section] = {}
+        elif element.name == 'h3':
+            sub_section = element.text.strip()
+            if current_section == "Functional Requirements" and sub_section == "Streamlit UI Pages":
+                json_data['BusinessRequirementsDocument'][current_section][sub_section] = []
+            else:
+                json_data['BusinessRequirementsDocument'][current_section][sub_section] = {}
+        elif element.name == 'ul':
+            requirements = []
+            for li in element.find_all('li'):
+                if li.find('ul'):
+                    sub_conditions = []
+                    for sub_li in li.find('ul').find_all('li'):
+                        sub_conditions.append(sub_li.text.strip())
+                    requirements.append({li.text.split(':')[0].strip(): sub_conditions})
+                else:
+                    requirements.append(li.text.strip())
+            
+            if current_section == "Functional Requirements" and sub_section == "Streamlit UI Pages":
+                pages.append({"Page": {"Name": sub_section, "Requirements": requirements}})
+            else:
+                json_data['BusinessRequirementsDocument'][current_section][sub_section] = requirements
+    
+    if pages:
+        json_data['BusinessRequirementsDocument']["Functional Requirements"]["Streamlit UI Pages"] = pages
+    
+    return json_data
+
+def json_to_xml(json_obj, root):
+    if isinstance(json_obj, dict):
+        for key, value in json_obj.items():
+            sub_element = ET.SubElement(root, key.replace(" ", ""))
+            json_to_xml(value, sub_element)
+    elif isinstance(json_obj, list):
+        for item in json_obj:
+            item_element = ET.SubElement(root, "Requirement")
+            json_to_xml(item, item_element)
+    else:
+        root.text = str(json_obj)
+
+def convert_md_to_json_and_xml(md_file_path, output_json_path, output_xml_path):
+    md_content = read_markdown_file(md_file_path)
+    json_data = markdown_to_json(md_content)
+    
+    with open(output_json_path, 'w', encoding='utf-8') as json_file:
+        json.dump(json_data, json_file, indent=4)
+    
+    root = ET.Element("BusinessRequirementsDocument")
+    json_to_xml(json_data, root)
+    
+    tree = ET.ElementTree(root)
+    tree.write(output_xml_path, encoding="utf-8", xml_declaration=True)
+
+if __name__ == "__main__":
+    md_file_path = "./BRD.md"
+    output_json_path = "./BRD.json"
+    output_xml_path = "./BRD.xml"
+    
+    convert_md_to_json_and_xml(md_file_path, output_json_path, output_xml_path)
+    print(f"Conversion completed. JSON saved at {output_json_path}, XML saved at {output_xml_path}")
