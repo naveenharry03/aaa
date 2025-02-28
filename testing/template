@@ -174,3 +174,219 @@ flask_api/
 │
 ├── api.py
 └── requirements.txt
+
+
+import re
+import json
+import xml.dom.minidom
+import xml.etree.ElementTree as ET
+from pathlib import Path
+
+def parse_markdown_to_json(markdown_file_path):
+    """
+    Parse the Markdown file into a JSON structure.
+    """
+    with open(markdown_file_path, 'r', encoding='utf-8') as file:
+        content = file.read()
+
+    # Initialize the JSON structure
+    brd = {
+        "ProjectInformation": {},
+        "Overview": {},
+        "FunctionalRequirements": {
+            "MenuTitle": "",
+            "StreamlitUIPages": []
+        },
+        "LibrariesToUse": []
+    }
+
+    # Extract Project Information
+    project_info_match = re.search(r'## Project Information(.*?)##', content, re.DOTALL)
+    if project_info_match:
+        project_info = project_info_match.group(1)
+
+        project_name_match = re.search(r'\*\*Project Name\*\*: (.*?)$', project_info, re.MULTILINE)
+        if project_name_match:
+            brd["ProjectInformation"]["ProjectName"] = project_name_match.group(1).strip()
+
+        version_match = re.search(r'\*\*Version\*\*: (.*?)$', project_info, re.MULTILINE)
+        if version_match:
+            brd["ProjectInformation"]["Version"] = version_match.group(1).strip()
+
+        date_match = re.search(r'\*\*Date\*\*: (.*?)$', project_info, re.MULTILINE)
+        if date_match:
+            brd["ProjectInformation"]["Date"] = date_match.group(1).strip()
+
+        author_match = re.search(r'\*\*Author\*\*: (.*?)$', project_info, re.MULTILINE)
+        if author_match:
+            brd["ProjectInformation"]["Author"] = author_match.group(1).strip()
+
+        stakeholders_match = re.search(r'\*\*Stakeholders\*\*: (.*?)$', project_info, re.MULTILINE)
+        if stakeholders_match:
+            brd["ProjectInformation"]["Stakeholders"] = stakeholders_match.group(1).strip()
+
+    # Extract Overview
+    overview_match = re.search(r'## Overview(.*?)##', content, re.DOTALL)
+    if overview_match:
+        overview = overview_match.group(1)
+
+        description_match = re.search(r'\*\*Description\*\*: (.*?)$', overview, re.MULTILINE)
+        if description_match:
+            brd["Overview"]["Description"] = description_match.group(1).strip()
+
+    # Extract Menu Title
+    menu_title_match = re.search(r'\*\*Menu Title\*\*: (.*?)$', content, re.MULTILINE)
+    if menu_title_match:
+        brd["FunctionalRequirements"]["MenuTitle"] = menu_title_match.group(1).strip()
+
+    # Extract Streamlit UI Pages
+    page_sections = re.findall(r'#### Page \d+: (.*?)(?=#### Page \d+:|#### Additional Pages|## Libraries)', content, re.DOTALL)
+    additional_pages_match = re.search(r'#### Additional Pages \(Optional\)(.*?)## Libraries', content, re.DOTALL)
+
+    if additional_pages_match:
+        additional_pages = additional_pages_match.group(1)
+        additional_page_sections = re.findall(r'\*\*Page Name\*\*: (.*?)(?=\*\*Page Name\*\*:|$)', additional_pages, re.DOTALL)
+        page_sections.extend(additional_page_sections)
+
+    for page_section in page_sections:
+        if not page_section.strip() or "[No additional pages for this example]" in page_section:
+            continue
+
+        page = {}
+
+        # Extract page name
+        page_name_match = re.search(r'^(.*?)$', page_section, re.MULTILINE)
+        if page_name_match:
+            page["Name"] = page_name_match.group(1).strip()
+
+        # Extract description
+        description_match = re.search(r'\*\*Description\*\*: (.*?)$', page_section, re.MULTILINE)
+        if description_match:
+            page["Description"] = description_match.group(1).strip()
+
+        # Extract requirements
+        requirements_section = re.search(r'\*\*Requirements\*\*:(.*?)(?=#### Page \d+:|#### Additional Pages|## Libraries|$)', page_section, re.DOTALL)
+        if requirements_section:
+            requirements_text = requirements_section.group(1)
+            requirements = []
+
+            # Find all requirements
+            requirement_blocks = re.findall(r'- \*\*Requirement\*\*: (.*?)(?=- \*\*Requirement\*\*:|$)', requirements_text, re.DOTALL)
+
+            for req_block in requirement_blocks:
+                requirement = {}
+
+                # Extract the requirement text (first line)
+                req_text_match = re.search(r'^(.*?)(?=\n|$)', req_block.strip(), re.MULTILINE)
+                if req_text_match:
+                    requirement["Requirement"] = req_text_match.group(1).strip()
+
+                # Extract conditions
+                condition_matches = re.findall(r'- \*\*Condition \(Optional\)\*\*: (.*?)$', req_block, re.MULTILINE)
+
+                if condition_matches:
+                    conditions = []
+                    for condition in condition_matches:
+                        if condition.strip() and "[No conditions for this requirement]" not in condition:
+                            conditions.append({"Condition": condition.strip()})
+
+                    if conditions:
+                        requirement["Conditions"] = conditions
+
+                requirements.append(requirement)
+
+            page["Requirements"] = requirements
+
+        brd["FunctionalRequirements"]["StreamlitUIPages"].append(page)
+
+    # Extract Libraries to Use
+    libraries_match = re.search(r'## Libraries to Use(.*?)$', content, re.DOTALL)
+    if libraries_match:
+        libraries = libraries_match.group(1)
+        library_matches = re.findall(r'- \*\*Library \d+\*\*: (.*?)$', libraries, re.MULTILINE)
+
+        for library in library_matches:
+            if library.strip() and "[Add more libraries as needed]" not in library:
+                brd["LibrariesToUse"].append(library.strip())
+
+    return brd
+
+def json_to_xml(json_data):
+    """
+    Convert the JSON structure to XML.
+    """
+    root = ET.Element("BusinessRequirementsDocument")
+
+    # Project Information
+    project_info = ET.SubElement(root, "ProjectInformation")
+    for key, value in json_data["ProjectInformation"].items():
+        ET.SubElement(project_info, key).text = value
+
+    # Overview
+    overview = ET.SubElement(root, "Overview")
+    for key, value in json_data["Overview"].items():
+        ET.SubElement(overview, key).text = value
+
+    # Functional Requirements
+    func_reqs = ET.SubElement(root, "FunctionalRequirements")
+    ET.SubElement(func_reqs, "MenuTitle").text = json_data["FunctionalRequirements"]["MenuTitle"]
+
+    # Streamlit UI Pages
+    pages = ET.SubElement(func_reqs, "StreamlitUIPages")
+
+    for page_data in json_data["FunctionalRequirements"]["StreamlitUIPages"]:
+        page = ET.SubElement(pages, "Page")
+        ET.SubElement(page, "Name").text = page_data.get("Name", "")
+        ET.SubElement(page, "Description").text = page_data.get("Description", "")
+
+        # Requirements
+        requirements = ET.SubElement(page, "Requirements")
+
+        for req_data in page_data.get("Requirements", []):
+            requirement = ET.SubElement(requirements, "Requirement")
+            requirement.text = req_data.get("Requirement", "")
+
+            # Conditions
+            if "Conditions" in req_data and req_data["Conditions"]:
+                for condition_data in req_data["Conditions"]:
+                    condition = ET.SubElement(requirement, "Condition")
+                    condition.text = condition_data.get("Condition", "")
+
+    # Libraries to Use
+    libraries = ET.SubElement(root, "LibrariesToUse")
+    for lib in json_data["LibrariesToUse"]:
+        ET.SubElement(libraries, "Library").text = lib
+
+    # Convert to string and pretty print
+    rough_string = ET.tostring(root, 'utf-8')
+    reparsed = xml.dom.minidom.parseString(rough_string)
+    return reparsed.toprettyxml(indent="  ")
+
+def main():
+    # Get the input file path
+    markdown_file_path = input("Enter the path to the Markdown file: ")
+
+    try:
+        # Parse Markdown to JSON
+        json_data = parse_markdown_to_json(markdown_file_path)
+
+        # Save JSON to file
+        json_file_path = Path(markdown_file_path).with_suffix('.json')
+        with open(json_file_path, 'w', encoding='utf-8') as f:
+            json.dump(json_data, f, indent=2)
+        print(f"JSON file saved to: {json_file_path}")
+
+        # Convert JSON to XML
+        xml_content = json_to_xml(json_data)
+
+        # Save XML to file
+        xml_file_path = Path(markdown_file_path).with_suffix('.xml')
+        with open(xml_file_path, 'w', encoding='utf-8') as f:
+            f.write(xml_content)
+        print(f"XML file saved to: {xml_file_path}")
+
+    except Exception as e:
+        print(f"An error occurred: {e}")
+
+if __name__ == "__main__":
+    main()
