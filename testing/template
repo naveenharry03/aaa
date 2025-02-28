@@ -1367,7 +1367,11 @@ def read_markdown_file(file_path):
 
 def parse_markdown_to_dict(markdown_content):
     """Parse markdown content to a structured dictionary."""
-    lines = markdown_content.split('\n')
+    # Split content into sections
+    sections = re.split(r'#{1,4}\s+', markdown_content)[1:]  # Skip the first empty part
+    section_titles = re.findall(r'#{1,4}\s+(.*?)$', markdown_content, re.MULTILINE)
+    
+    # Initialize the BRD dictionary
     brd_dict = {
         "BusinessRequirementsDocument": {
             "Project": "",
@@ -1389,153 +1393,78 @@ def parse_markdown_to_dict(markdown_content):
             }
         }
     }
-
-    current_section = None
-    current_subsection = None
-    current_page = None
-    current_requirement = None
-    in_libraries = False
-
-    i = 0
-    while i < len(lines):
-        line = lines[i].strip()
-
-        # Skip empty lines
-        if not line:
-            i += 1
-            continue
-
-        # Main sections (h1)
-        if line.startswith('# '):
-            current_section = line[2:].strip()
-            current_subsection = None
-            current_page = None
+    
+    # Process each section
+    for i, (title, content) in enumerate(zip(section_titles, sections)):
+        content = content.strip()
+        
+        # Process based on section title
+        if title == "Business Requirements Document":
+            continue  # Skip the main title
+        elif title == "Project":
+            match = re.search(r'\*\*(.*?)\*\*', content)
+            if match:
+                brd_dict["BusinessRequirementsDocument"]["Project"] = match.group(1).strip()
+        elif title == "Version":
+            match = re.search(r'\*\*(.*?)\*\*', content)
+            if match:
+                brd_dict["BusinessRequirementsDocument"]["Version"] = match.group(1).strip()
+        elif title == "Date":
+            match = re.search(r'\*\*(.*?)\*\*', content)
+            if match:
+                brd_dict["BusinessRequirementsDocument"]["Date"] = match.group(1).strip()
+        elif title == "Author":
+            match = re.search(r'\*\*(.*?)\*\*', content)
+            if match:
+                brd_dict["BusinessRequirementsDocument"]["Author"] = match.group(1).strip()
+        elif title == "Stakeholders":
+            match = re.search(r'\*\*(.*?)\*\*', content)
+            if match:
+                brd_dict["BusinessRequirementsDocument"]["Stakeholders"] = match.group(1).strip()
+        elif title == "Overview":
+            match = re.search(r'\*\*Description\*\*:\s*(.*?)(?=$|\n\n)', content, re.DOTALL)
+            if match:
+                brd_dict["BusinessRequirementsDocument"]["Overview"]["Description"] = match.group(1).strip()
+        elif title == "Menu Title":
+            match = re.search(r'\*\*(.*?)\*\*', content)
+            if match:
+                brd_dict["BusinessRequirementsDocument"]["FunctionalRequirements"]["MenuTitle"] = match.group(1).strip()
+        elif title.startswith("Libraries to Use"):
+            libraries = re.findall(r'`(.*?)`', content)
+            brd_dict["BusinessRequirementsDocument"]["LibrariesToUse"]["Library"] = libraries
+        elif re.match(r'.*Page$', title):  # This matches page titles like "Home Page", "Upload Page", etc.
+            page_dict = {"Name": title, "Description": "", "Requirements": []}
+            
+            # Extract description
+            desc_match = re.search(r'\*\*Description\*\*:\s*(.*?)(?=\n\*\*Requirements\*\*|\n\n)', content, re.DOTALL)
+            if desc_match:
+                page_dict["Description"] = desc_match.group(1).strip()
+            
+            # Extract requirements and sub-requirements
+            req_blocks = re.split(r'\*\*(?:Requirements|Sub-Requirements)\*\*:', content)[1:]
+            
             current_requirement = None
-            in_libraries = False
-            i += 1
-            continue
-
-        # Subsections (h2)
-        if line.startswith('## '):
-            current_subsection = line[3:].strip()
-            current_page = None
-            current_requirement = None
-
-            # Check next line for content
-            next_line_index = i + 1
-            while next_line_index < len(lines) and not lines[next_line_index].strip():
-                next_line_index += 1
-
-            if next_line_index < len(lines):
-                next_line = lines[next_line_index].strip()
-
-                if current_subsection == "Project":
-                    if next_line.startswith('- **'):
-                        value = next_line.split('**:', 1)[1].strip() if '**:' in next_line else next_line.split('**', 2)[1].strip()
-                        brd_dict["BusinessRequirementsDocument"]["Project"] = value
-                elif current_subsection == "Version":
-                    if next_line.startswith('- **'):
-                        value = next_line.split('**:', 1)[1].strip() if '**:' in next_line else next_line.split('**', 2)[1].strip()
-                        brd_dict["BusinessRequirementsDocument"]["Version"] = value
-                elif current_subsection == "Date":
-                    if next_line.startswith('- **'):
-                        value = next_line.split('**:', 1)[1].strip() if '**:' in next_line else next_line.split('**', 2)[1].strip()
-                        brd_dict["BusinessRequirementsDocument"]["Date"] = value
-                elif current_subsection == "Author":
-                    if next_line.startswith('- **'):
-                        value = next_line.split('**:', 1)[1].strip() if '**:' in next_line else next_line.split('**', 2)[1].strip()
-                        brd_dict["BusinessRequirementsDocument"]["Author"] = value
-                elif current_subsection == "Stakeholders":
-                    if next_line.startswith('- **'):
-                        value = next_line.split('**:', 1)[1].strip() if '**:' in next_line else next_line.split('**', 2)[1].strip()
-                        brd_dict["BusinessRequirementsDocument"]["Stakeholders"] = value
-                elif current_subsection == "Overview":
-                    if next_line.startswith('- **Description**'):
-                        desc_line = next_line.split(': ', 1)
-                        if len(desc_line) > 1:
-                            brd_dict["BusinessRequirementsDocument"]["Overview"]["Description"] = desc_line[1].strip()
-                elif current_subsection == "Functional Requirements":
-                    current_subsection = "FunctionalRequirements"
-                elif current_subsection == "Libraries to Use":
-                    in_libraries = True
-
-            i += 1
-            continue
-
-        # Sub-subsections (h3)
-        if line.startswith('### '):
-            subsub_section = line[4:].strip()
-            if current_subsection == "FunctionalRequirements":
-                if subsub_section == "Menu Title":
-                    # Check next line for content
-                    next_line_index = i + 1
-                    while next_line_index < len(lines) and not lines[next_line_index].strip():
-                        next_line_index += 1
-
-                    if next_line_index < len(lines):
-                        next_line = lines[next_line_index].strip()
-                        if next_line.startswith('- **'):
-                            value = next_line.split('**:', 1)[1].strip() if '**:' in next_line else next_line.split('**', 2)[1].strip()
-                            brd_dict["BusinessRequirementsDocument"]["FunctionalRequirements"]["MenuTitle"] = value
-                elif subsub_section == "Streamlit UI Pages":
-                    current_subsection = "StreamlituIPages"
-
-            i += 1
-            continue
-
-        # Sub-sub-subsections (h4)
-        if line.startswith('#### '):
-            page_name = line[5:].strip()
-            if current_subsection == "StreamlituIPages":
-                current_page = {
-                    "Name": page_name,
-                    "Description": "",
-                    "Requirements": []
-                }
-                brd_dict["BusinessRequirementsDocument"]["FunctionalRequirements"]["StreamlituIPages"]["Page"].append(current_page)
-                current_requirement = None
-
-            i += 1
-            continue
-
-        # Content lines for page description
-        if line.startswith('- **Description**') and current_page is not None:
-            desc_parts = line.split(': ', 1)
-            if len(desc_parts) > 1:
-                current_page["Description"] = desc_parts[1].strip()
-
-            i += 1
-            continue
-
-        # Requirements (bullet points)
-        if line.startswith('- ') and current_page is not None and not line.startswith('- **'):
-            requirement_text = line[2:].strip()
-            requirement = {"Requirement": requirement_text, "Conditions": []}
-            current_page["Requirements"].append(requirement)
-            current_requirement = requirement
-
-            i += 1
-            continue
-
-        # Conditions (sub-bullet points)
-        if line.startswith('    - ') and current_requirement is not None:
-            condition_text = line[6:].strip()
-            current_requirement["Conditions"].append(condition_text)
-
-            i += 1
-            continue
-
-        # Libraries
-        if line.startswith('- `') and in_libraries:
-            library = line[3:].strip().strip('`')
-            brd_dict["BusinessRequirementsDocument"]["LibrariesToUse"]["Library"].append(library)
-
-            i += 1
-            continue
-
-        # If none of the above conditions match, move to the next line
-        i += 1
-
+            
+            for j, block in enumerate(req_blocks):
+                block = block.strip()
+                
+                if j % 2 == 0:  # This is a Requirements block
+                    # Split by lines and process each line as a requirement
+                    lines = [line.strip() for line in block.split('\n') if line.strip()]
+                    for line in lines:
+                        if line and not line.startswith('**'):
+                            req = {"Requirement": line, "Conditions": []}
+                            page_dict["Requirements"].append(req)
+                            current_requirement = req
+                else:  # This is a Sub-Requirements block
+                    # Split by lines and process each line as a condition
+                    lines = [line.strip() for line in block.split('\n') if line.strip()]
+                    for line in lines:
+                        if line and not line.startswith('**') and current_requirement is not None:
+                            current_requirement["Conditions"].append(line)
+            
+            brd_dict["BusinessRequirementsDocument"]["FunctionalRequirements"]["StreamlituIPages"]["Page"].append(page_dict)
+    
     return brd_dict
 
 def dict_to_xml(dict_data):
