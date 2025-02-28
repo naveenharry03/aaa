@@ -1061,3 +1061,293 @@ if __name__ == "__main__":
 # BRD.json
 # BRD.xml
 
+``````````````````````````
+import re
+import json
+import xml.dom.minidom
+import xml.etree.ElementTree as ET
+import os
+
+def read_markdown_file(file_path):
+    """Read the markdown file content."""
+    with open(file_path, 'r', encoding='utf-8') as file:
+        return file.read()
+
+def parse_markdown_to_dict(markdown_content):
+    """Parse markdown content to a structured dictionary."""
+    lines = markdown_content.split('\n')
+    brd_dict = {
+        "BusinessRequirementsDocument": {
+            "Project": "",
+            "Version": "",
+            "Date": "",
+            "Author": "",
+            "Stakeholders": "",
+            "Overview": {
+                "Description": ""
+            },
+            "FunctionalRequirements": {
+                "MenuTitle": "",
+                "StreamlituIPages": {
+                    "Page": []
+                }
+            },
+            "LibrariesToUse": {
+                "Library": []
+            }
+        }
+    }
+
+    current_section = None
+    current_subsection = None
+    current_page = None
+    current_requirement = None
+    in_libraries = False
+
+    i = 0
+    while i < len(lines):
+        line = lines[i].strip()
+
+        # Skip empty lines
+        if not line:
+            i += 1
+            continue
+
+        # Main sections (h1)
+        if line.startswith('# '):
+            current_section = line[2:].strip()
+            current_subsection = None
+            current_page = None
+            current_requirement = None
+            in_libraries = False
+            i += 1
+            continue
+
+        # Subsections (h2)
+        if line.startswith('## '):
+            current_subsection = line[3:].strip()
+            current_page = None
+            current_requirement = None
+
+            # Check next line for content
+            next_line_index = i + 1
+            while next_line_index < len(lines) and not lines[next_line_index].strip():
+                next_line_index += 1
+
+            if next_line_index < len(lines):
+                next_line = lines[next_line_index].strip()
+
+                if current_subsection == "Project":
+                    if next_line.startswith('- **'):
+                        value = next_line.split('**:', 1)[1].strip() if '**:' in next_line else next_line.split('**', 2)[1].strip()
+                        brd_dict["BusinessRequirementsDocument"]["Project"] = value
+                elif current_subsection == "Version":
+                    if next_line.startswith('- **'):
+                        value = next_line.split('**:', 1)[1].strip() if '**:' in next_line else next_line.split('**', 2)[1].strip()
+                        brd_dict["BusinessRequirementsDocument"]["Version"] = value
+                elif current_subsection == "Date":
+                    if next_line.startswith('- **'):
+                        value = next_line.split('**:', 1)[1].strip() if '**:' in next_line else next_line.split('**', 2)[1].strip()
+                        brd_dict["BusinessRequirementsDocument"]["Date"] = value
+                elif current_subsection == "Author":
+                    if next_line.startswith('- **'):
+                        value = next_line.split('**:', 1)[1].strip() if '**:' in next_line else next_line.split('**', 2)[1].strip()
+                        brd_dict["BusinessRequirementsDocument"]["Author"] = value
+                elif current_subsection == "Stakeholders":
+                    if next_line.startswith('- **'):
+                        value = next_line.split('**:', 1)[1].strip() if '**:' in next_line else next_line.split('**', 2)[1].strip()
+                        brd_dict["BusinessRequirementsDocument"]["Stakeholders"] = value
+                elif current_subsection == "Overview":
+                    if next_line.startswith('- **Description**'):
+                        desc_line = next_line.split(': ', 1)
+                        if len(desc_line) > 1:
+                            brd_dict["BusinessRequirementsDocument"]["Overview"]["Description"] = desc_line[1].strip()
+                elif current_subsection == "Functional Requirements":
+                    current_subsection = "FunctionalRequirements"
+                elif current_subsection == "Libraries to Use":
+                    in_libraries = True
+
+            i += 1
+            continue
+
+        # Sub-subsections (h3)
+        if line.startswith('### '):
+            subsub_section = line[4:].strip()
+            if current_subsection == "FunctionalRequirements":
+                if subsub_section == "Menu Title":
+                    # Check next line for content
+                    next_line_index = i + 1
+                    while next_line_index < len(lines) and not lines[next_line_index].strip():
+                        next_line_index += 1
+
+                    if next_line_index < len(lines):
+                        next_line = lines[next_line_index].strip()
+                        if next_line.startswith('- **'):
+                            value = next_line.split('**:', 1)[1].strip() if '**:' in next_line else next_line.split('**', 2)[1].strip()
+                            brd_dict["BusinessRequirementsDocument"]["FunctionalRequirements"]["MenuTitle"] = value
+                elif subsub_section == "Streamlit UI Pages":
+                    current_subsection = "StreamlituIPages"
+
+            i += 1
+            continue
+
+        # Sub-sub-subsections (h4)
+        if line.startswith('#### '):
+            page_name = line[5:].strip()
+            if current_subsection == "StreamlituIPages":
+                current_page = {
+                    "Name": page_name,
+                    "Description": "",
+                    "Requirements": []
+                }
+                brd_dict["BusinessRequirementsDocument"]["FunctionalRequirements"]["StreamlituIPages"]["Page"].append(current_page)
+                current_requirement = None
+
+            i += 1
+            continue
+
+        # Content lines for page description
+        if line.startswith('- **Description**') and current_page is not None:
+            desc_parts = line.split(': ', 1)
+            if len(desc_parts) > 1:
+                current_page["Description"] = desc_parts[1].strip()
+
+            i += 1
+            continue
+
+        # Requirements (bullet points)
+        if line.startswith('- ') and current_page is not None and not line.startswith('- **'):
+            requirement_text = line[2:].strip()
+            requirement = {"Requirement": requirement_text, "Conditions": []}
+            current_page["Requirements"].append(requirement)
+            current_requirement = requirement
+
+            i += 1
+            continue
+
+        # Conditions (sub-bullet points)
+        if line.startswith('    - ') and current_requirement is not None:
+            condition_text = line[6:].strip()
+            current_requirement["Conditions"].append(condition_text)
+
+            i += 1
+            continue
+
+        # Libraries
+        if line.startswith('- `') and in_libraries:
+            library = line[3:].strip().strip('`')
+            brd_dict["BusinessRequirementsDocument"]["LibrariesToUse"]["Library"].append(library)
+
+            i += 1
+            continue
+
+        # If none of the above conditions match, move to the next line
+        i += 1
+
+    return brd_dict
+
+def dict_to_xml(dict_data):
+    """Convert dictionary to XML."""
+    root = ET.Element("BusinessRequirementsDocument")
+
+    # Add simple elements
+    for key in ["Project", "Version", "Date", "Author", "Stakeholders"]:
+        if key in dict_data["BusinessRequirementsDocument"]:
+            element = ET.SubElement(root, key)
+            element.text = dict_data["BusinessRequirementsDocument"][key]
+
+    # Add Overview
+    if "Overview" in dict_data["BusinessRequirementsDocument"]:
+        overview = ET.SubElement(root, "Overview")
+        description = ET.SubElement(overview, "Description")
+        description.text = dict_data["BusinessRequirementsDocument"]["Overview"]["Description"]
+
+    # Add Functional Requirements
+    if "FunctionalRequirements" in dict_data["BusinessRequirementsDocument"]:
+        func_reqs = ET.SubElement(root, "FunctionalRequirements")
+
+        # Add Menu Title
+        if "MenuTitle" in dict_data["BusinessRequirementsDocument"]["FunctionalRequirements"]:
+            menu_title = ET.SubElement(func_reqs, "MenuTitle")
+            menu_title.text = dict_data["BusinessRequirementsDocument"]["FunctionalRequirements"]["MenuTitle"]
+
+        # Add Streamlit UI Pages
+        if "StreamlituIPages" in dict_data["BusinessRequirementsDocument"]["FunctionalRequirements"]:
+            ui_pages = ET.SubElement(func_reqs, "StreamlituIPages")
+
+            # Add Pages
+            for page_data in dict_data["BusinessRequirementsDocument"]["FunctionalRequirements"]["StreamlituIPages"]["Page"]:
+                page = ET.SubElement(ui_pages, "Page")
+
+                # Add Page Name
+                name = ET.SubElement(page, "Name")
+                name.text = page_data["Name"]
+
+                # Add Page Description
+                description = ET.SubElement(page, "Description")
+                description.text = page_data["Description"]
+
+                # Add Requirements
+                requirements = ET.SubElement(page, "Requirements")
+
+                for req_data in page_data["Requirements"]:
+                    requirement = ET.SubElement(requirements, "Requirement")
+                    requirement.text = req_data["Requirement"]
+
+                    # Add Conditions if present
+                    if req_data["Conditions"]:
+                        for condition in req_data["Conditions"]:
+                            condition_element = ET.SubElement(requirement, "Condition")
+                            condition_element.text = condition
+
+    # Add Libraries to Use
+    if "LibrariesToUse" in dict_data["BusinessRequirementsDocument"]:
+        libraries = ET.SubElement(root, "LibrariesToUse")
+
+        for lib in dict_data["BusinessRequirementsDocument"]["LibrariesToUse"]["Library"]:
+            library = ET.SubElement(libraries, "Library")
+            library.text = lib
+
+    # Convert to string and pretty print
+    rough_string = ET.tostring(root, 'utf-8')
+    reparsed = xml.dom.minidom.parseString(rough_string)
+    return reparsed.toprettyxml(indent="\t")
+
+def main():
+    # Find the BRD markdown file in the current directory
+    brd_files = [f for f in os.listdir('.') if f.endswith('.md') and 'BRD' in f.upper()]
+
+    if not brd_files:
+        print("No BRD markdown file found in the current directory.")
+        return
+
+    brd_file = brd_files[0]
+    print(f"Processing {brd_file}...")
+
+    # Read markdown content
+    markdown_content = read_markdown_file(brd_file)
+
+    # Parse markdown to dictionary
+    brd_dict = parse_markdown_to_dict(markdown_content)
+
+    # Save JSON file
+    json_file = brd_file.replace('.md', '.json')
+    with open(json_file, 'w', encoding='utf-8') as f:
+        json.dump(brd_dict, f, indent=2)
+    print(f"JSON file saved as {json_file}")
+
+    # Convert dictionary to XML
+    xml_content = dict_to_xml(brd_dict)
+
+    # Save XML file
+    xml_file = brd_file.replace('.md', '.xml')
+    with open(xml_file, 'w', encoding='utf-8') as f:
+        f.write(xml_content)
+    print(f"XML file saved as {xml_file}")
+
+if __name__ == "__main__":
+    main()
+
+# Created/Modified files during execution:
+# BRD.json
+# BRD.xml
