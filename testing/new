@@ -1,0 +1,197 @@
+import streamlit as st
+import json
+import os
+import time
+import uuid
+from datetime import datetime
+import openai
+
+# Set page configuration
+st.set_page_config(
+    page_title="Chat with AI",
+    page_icon="💬",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
+
+# Constants
+HISTORY_DIR = "chat_history"
+MAX_MEMORY_TURNS = 5
+
+# Create history directory if it doesn't exist
+if not os.path.exists(HISTORY_DIR):
+    os.makedirs(HISTORY_DIR)
+
+# Initialize session state
+if "chat_id" not in st.session_state:
+    st.session_state.chat_id = str(uuid.uuid4())
+if "messages" not in st.session_state:
+    st.session_state.messages = []
+if "current_chat_turn" not in st.session_state:
+    st.session_state.current_chat_turn = 0
+
+# Function to load chat history
+def load_chat_history():
+    chat_files = {}
+    for filename in os.listdir(HISTORY_DIR):
+        if filename.endswith('.json'):
+            file_path = os.path.join(HISTORY_DIR, filename)
+            try:
+                with open(file_path, 'r') as f:
+                    chat_data = json.load(f)
+                    chat_id = filename.replace('.json', '')
+                    # Use the first user message as the title, or a default if none exists
+                    user_messages = [msg for msg in chat_data if msg["role"] == "user"]
+                    title = user_messages[0]["content"][:30] + "..." if user_messages else "New chat"
+                    timestamp = os.path.getctime(file_path)
+                    chat_files[chat_id] = {"title": title, "timestamp": timestamp}
+            except Exception as e:
+                st.error(f"Error loading chat history: {e}")
+    return dict(sorted(chat_files.items(), key=lambda x: x[1]["timestamp"], reverse=True))
+
+# Function to save chat history
+def save_chat_history(chat_id, messages):
+    try:
+        file_path = os.path.join(HISTORY_DIR, f"{chat_id}.json")
+        with open(file_path, 'w') as f:
+            json.dump(messages, f)
+    except Exception as e:
+        st.error(f"Error saving chat history: {e}")
+
+# Function to get AI response
+def get_ai_response(messages):
+    try:
+        response = openai.ChatCompletion.create(
+            model="gpt-3.5-turbo",
+            messages=messages,
+            temperature=0.7,
+        )
+        return response.choices[0].message["content"]
+    except Exception as e:
+        st.error(f"Error getting AI response: {e}")
+        return "I'm sorry, I encountered an error. Please try again."
+
+# Function to load specific chat
+def load_specific_chat(chat_id):
+    try:
+        file_path = os.path.join(HISTORY_DIR, f"{chat_id}.json")
+        if os.path.exists(file_path):
+            with open(file_path, 'r') as f:
+                return json.load(f)
+    except Exception as e:
+        st.error(f"Error loading chat: {e}")
+    return []
+
+# Function to start a new chat
+def start_new_chat():
+    st.session_state.chat_id = str(uuid.uuid4())
+    st.session_state.messages = []
+    st.session_state.current_chat_turn = 0
+
+# Sidebar - Chat History
+with st.sidebar:
+    st.title("Chat History")
+
+    # New chat button
+    if st.button("Start a new chat", key="new_chat_btn"):
+        start_new_chat()
+
+    st.divider()
+
+    # Load and display chat history
+    chat_history = load_chat_history()
+
+    # Display chat history
+    for chat_id, chat_info in chat_history.items():
+        if st.button(chat_info["title"], key=f"history_{chat_id}"):
+            st.session_state.chat_id = chat_id
+            st.session_state.messages = load_specific_chat(chat_id)
+            st.session_state.current_chat_turn = len([msg for msg in st.session_state.messages if msg["role"] == "user"])
+            st.rerun()
+
+# Main chat interface
+st.title("Chat with AI")
+
+# Display memory limit notification if reached
+if st.session_state.current_chat_turn >= MAX_MEMORY_TURNS:
+    st.warning(f"Memory limit reached ({MAX_MEMORY_TURNS} turns). Start a new chat for optimal performance.")
+    if st.button("Start New Chat", key="memory_limit_new_chat"):
+        start_new_chat()
+
+# Display chat messages
+for message in st.session_state.messages:
+    with st.chat_message(message["role"]):
+        st.markdown(message["content"])
+
+# Chat input
+if prompt := st.chat_input("Type your message here...", key="chat_input"):
+    # Add user message to chat
+    st.session_state.messages.append({"role": "user", "content": prompt})
+
+    # Display user message
+    with st.chat_message("user"):
+        st.markdown(prompt)
+
+    # Increment turn counter
+    st.session_state.current_chat_turn += 1
+
+    # Get and display AI response
+    with st.chat_message("assistant"):
+        message_placeholder = st.empty()
+        full_response = ""
+
+        # If within memory limit, get normal response
+        if st.session_state.current_chat_turn <= MAX_MEMORY_TURNS:
+            # Get AI response
+            ai_response = get_ai_response(st.session_state.messages)
+
+            # Simulate typing
+            for chunk in ai_response.split():
+                full_response += chunk + " "
+                time.sleep(0.05)
+                message_placeholder.markdown(full_response + "▌")
+
+            message_placeholder.markdown(ai_response)
+
+            # Add assistant response to chat history
+            st.session_state.messages.append({"role": "assistant", "content": ai_response})
+        else:
+            # Memory limit reached response
+            memory_limit_msg = "I notice we've had a lengthy conversation. For optimal performance, please start a new chat."
+            message_placeholder.markdown(memory_limit_msg)
+            st.session_state.messages.append({"role": "assistant", "content": memory_limit_msg})
+
+    # Save chat history
+    save_chat_history(st.session_state.chat_id, st.session_state.messages)
+
+    # Rerun to update UI
+    st.rerun()
+
+if __name__ == "__main__":
+    pass
+
+
+
+
+
+Template (for implementation)
+System Prompt
+You are an expert LLM assistant specializing in rephrasing user queries for optimal semantic search and retrieval-augmented generation (RAG).
+
+Instructions:
+1. Receive the following inputs:
+   - The raw user query: {user_query}
+   - The current context or topic for rephrasing: {context}
+   - The previous chat history and session context as a JSON object: {context_json}
+2. Analyze the user query in conjunction with both the current context and the previous chat history.
+3. Rephrase the user query into a clear, detailed, and contextually rich question that:
+   - Incorporates relevant details from the current context.
+   - Leverages information from the previous chat history and session context.
+   - Is unambiguous, self-contained, and maximizes information for semantic search and retrieval.
+4. Output only the rephrased question, without any additional commentary or explanation.
+User Prompt
+User Query: {user_query}
+Current Context: {context}
+Chat History Context (JSON): {context_json}
+
+Please rephrase the user query into a detailed, context-rich question suitable for semantic search, using both the current context and the chat history context.
