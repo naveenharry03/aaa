@@ -47,3 +47,97 @@ Address SQL Errors: If the analysis indicates a SQL error, identify the specific
 Contextual Awareness: Use the Chat History Context (JSON) to maintain context and provide more relevant feedback.
 
 This system prompt provides a clear role, goals, inputs, process, output requirements, and constraints for the validator agent. It should help the agent to effectively validate SQL queries and provide actionable feedback when necessary.
+
+
+
+
+
+
+
+
+
+
+
+
+------------------------------------------------------------
+
+import requests
+import json
+
+def get_access_token(tenant_id, client_id, client_secret):
+    url = f"https://login.microsoftonline.com/{tenant_id}/oauth2/v2.0/token"
+
+    headers = {
+        'Content-Type': 'application/x-www-form-urlencoded'
+    }
+
+    data = {
+        'grant_type': 'client_credentials',
+        'client_id': client_id,
+        'client_secret': client_secret,
+        'scope': 'https://graph.microsoft.com/.default'
+    }
+
+    response = requests.post(url, headers=headers, data=data)
+    return response.json()['access_token']
+
+
+def get_site_id(access_token, site_url):
+    # Extract hostname and site path from URL
+    # Example: https://yourtenant.sharepoint.com/sites/yoursite
+    parts = site_url.replace('https://', '').split('/')
+    hostname = parts[0]
+    site_path = '/' + '/'.join(parts[1:]) if len(parts) > 1 else ''
+    
+    url = f"https://graph.microsoft.com/v1.0/sites/{hostname}:{site_path}"
+    
+    headers = {
+        'Authorization': f'Bearer {access_token}',
+        'Content-Type': 'application/json'
+    }
+    
+    response = requests.get(url, headers=headers)
+    return response.json()['id']
+
+
+def get_drive_id(access_token, site_id):
+    url = f"https://graph.microsoft.com/v1.0/sites/{site_id}/drives"
+    
+    headers = {
+        'Authorization': f'Bearer {access_token}',
+        'Content-Type': 'application/json'
+    }
+    
+    response = requests.get(url, headers=headers)
+    drives = response.json()['value']
+    
+    # Return the default document library drive
+    for drive in drives:
+        if drive['name'] == 'Documents':
+            return drive['id']
+    
+    # If no Documents library, return first drive
+    return drives[0]['id'] if drives else None
+
+
+
+# Your credentials
+tenant_id = "your-tenant-id"
+client_id = "your-client-id"
+client_secret = "your-client-secret"
+site_url = "https://yourtenant.sharepoint.com/sites/yoursite"
+
+try:
+    # Get access token
+    token = get_access_token(tenant_id, client_id, client_secret)
+    
+    # Get site ID
+    site_id = get_site_id(token, site_url)
+    print(f"Site ID: {site_id}")
+    
+    # Get drive ID
+    drive_id = get_drive_id(token, site_id)
+    print(f"Drive ID: {drive_id}")
+    
+except Exception as e:
+    print(f"Error: {e}")
