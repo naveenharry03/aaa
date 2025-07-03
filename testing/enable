@@ -1,0 +1,72 @@
+from pyspark.sql.functions import udf, col
+from pyspark.sql.types import StringType
+import os
+
+# Read your Delta table
+table_name = "your_catalog.your_schema.your_table"
+df = spark.read.format("delta").table(table_name)
+
+# Extract table name for folder structure
+table_folder_name = table_name.split(".")[-1]  # Gets last part of table name
+
+def save_file_by_extension(content_blob, file_metadata, table_name) -> str:
+    try:
+        # Extract filename and extension
+        filename = file_metadata.name
+        file_extension = filename.split('.')[-1].lower() if '.' in filename else 'unknown'
+        
+        # Create base path structure
+        base_path = f"/Workspace/Users/your_username/experiments/{table_name}"
+        extension_folder = f"{base_path}/{file_extension}"
+        
+        # Create directories
+        os.makedirs(extension_folder, exist_ok=True)
+        
+        # Full file path
+        full_file_path = f"{extension_folder}/{filename}"
+        
+        # Write binary content to file
+        with open(full_file_path, "wb") as f:
+            f.write(content_blob.inline_content)
+        
+        return full_file_path
+        
+    except Exception as e:
+        return f"Error: {str(e)}"
+
+# Create UDF
+save_file_udf = udf(save_file_by_extension, StringType())
+
+# Apply UDF to save files
+df_with_saved_files = df.withColumn(
+    "saved_file_path",
+    save_file_udf(col("content"), col("file_metadata"), lit(table_folder_name))
+)
+
+# Show results
+df_with_saved_files.select("file_id", "file_metadata.name", "saved_file_path").show(truncate=False)
+
+# Optional: Get summary of files saved by extension
+from pyspark.sql.functions import split, lit
+
+df_summary = df_with_saved_files.withColumn(
+    "extension", 
+    split(col("file_metadata.name"), "\\.").getItem(-1)
+).groupBy("extension").count()
+
+print("Files saved by extension:")
+df_summary.show()
+
+
+# Replace with your actual values
+table_name = "your_catalog.your_schema.sharepoint_files"
+df = spark.read.format("delta").table(table_name)
+
+# Apply the UDF
+result_df = df.withColumn(
+    "saved_path",
+    save_file_udf(col("content"), col("file_metadata"), lit("sharepoint_files"))
+)
+
+# Execute to save files
+result_df.write.mode("overwrite").format("delta").saveAsTable("temp.file_extraction_log")
