@@ -70,3 +70,37 @@ result_df = df.withColumn(
 
 # Execute to save files
 result_df.write.mode("overwrite").format("delta").saveAsTable("temp.file_extraction_log")
+
+
+from pyspark.sql.functions import col, pandas_udf
+import os
+
+# Read your delta table
+table_name = "your_catalog.your_schema.your_table"
+df = spark.read.format("delta").table(table_name)
+
+# Define the base volume path
+volume_base = "/Volumes/your_catalog/your_schema/sharepoint_files_volume"
+
+# Use a Pandas UDF for batch processing and better performance
+@pandas_udf("string")
+def save_to_volume_udf(content_series, metadata_series):
+    paths = []
+    for content, metadata in zip(content_series, metadata_series):
+        filename = metadata['name']
+        ext = filename.split('.')[-1].lower() if '.' in filename else 'unknown'
+        folder = os.path.join(volume_base, ext)
+        os.makedirs(folder, exist_ok=True)
+        file_path = os.path.join(folder, filename)
+        with open(file_path, "wb") as f:
+            f.write(content)
+        paths.append(file_path)
+    return pd.Series(paths)
+
+# Apply the UDF
+df = df.withColumn(
+    "saved_path",
+    save_to_volume_udf(col("content"), col("file_metadata"))
+)
+
+df.select("file_id", "file_metadata.name", "saved_path").show(truncate=False)
