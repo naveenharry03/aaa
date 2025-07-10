@@ -1,106 +1,63 @@
-from pyspark.sql.functions import udf, col
-from pyspark.sql.types import StringType
-import os
+from databricks.sdk import WorkspaceClient
+import databricks.sdk.service.catalog as c
 
-# Read your Delta table
-table_name = "your_catalog.your_schema.your_table"
-df = spark.read.format("delta").table(table_name)
+vsc = VectorSearchClient(disable_notice=True)
 
-# Extract table name for folder structure
-table_folder_name = table_name.split(".")[-1]  # Gets last part of table name
+TABLE_NAME_RAG_VSI = "sample_naveen_rag_vsi"
 
-def save_file_by_extension(content_blob, file_metadata, table_name) -> str:
+source_table_name = f"{CATALOG}.{SCHEMA_NAME}.{TABLE_NAME}"
+vsi_index_name = f"{CATALOG}.{SCHEMA_NAME}.{TABLE_NAME_RAG_VSI}"
+
+def index_exists(vsc, endpoint_name, index_name):
+    """
+    Checks if a vector search index exists on the given endpoint.
+    """
     try:
-        # Extract filename and extension
-        filename = file_metadata.name
-        file_extension = filename.split('.')[-1].lower() if '.' in filename else 'unknown'
-        
-        # Create base path structure
-        base_path = f"/Workspace/Users/your_username/experiments/{table_name}"
-        extension_folder = f"{base_path}/{file_extension}"
-        
-        # Create directories
-        os.makedirs(extension_folder, exist_ok=True)
-        
-        # Full file path
-        full_file_path = f"{extension_folder}/{filename}"
-        
-        # Write binary content to file
-        with open(full_file_path, "wb") as f:
-            f.write(content_blob.inline_content)
-        
-        return full_file_path
-        
+        idx = vsc.get_index(index_name)
+        if idx['endpoint_name'] == endpoint_name:
+            return True
+        else:
+            return False
     except Exception as e:
-        return f"Error: {str(e)}"
-
-# Create UDF
-save_file_udf = udf(save_file_by_extension, StringType())
-
-# Apply UDF to save files
-df_with_saved_files = df.withColumn(
-    "saved_file_path",
-    save_file_udf(col("content"), col("file_metadata"), lit(table_folder_name))
-)
-
-# Show results
-df_with_saved_files.select("file_id", "file_metadata.name", "saved_file_path").show(truncate=False)
-
-# Optional: Get summary of files saved by extension
-from pyspark.sql.functions import split, lit
-
-df_summary = df_with_saved_files.withColumn(
-    "extension", 
-    split(col("file_metadata.name"), "\\.").getItem(-1)
-).groupBy("extension").count()
-
-print("Files saved by extension:")
-df_summary.show()
+        return False
 
 
-# Replace with your actual values
-table_name = "your_catalog.your_schema.sharepoint_files"
-df = spark.read.format("delta").table(table_name)
+# create or sync the index
+if not index_exists(vsc, ENDPOINT_NAME, vsi_index_name):
+    print(f"Creating index {vsi_index_name} on endpoint {ENDPOINT_NAME}...")
+    vsc.create_delta_sync_index(
+        endpoint_name = ENDPOINT_NAME,
+        index_name = vsi_index_name,
+        source_table_name = source_table_name,
+        pipeline_type = "TRIGGERED",
+        primary_key = "chunk_id",
+        embedding_vector_column = "embeddings_array",
+        embedding_dimension = 1024
+    )
+else:
+    vsc.get_index(vsi_index_name).sync()  # Fixed: use vsi_index_name, not endpoint_name
 
-# Apply the UDF
-result_df = df.withColumn(
-    "saved_path",
-    save_file_udf(col("content"), col("file_metadata"), lit("sharepoint_files"))
-)
-
-# Execute to save files
-result_df.write.mode("overwrite").format("delta").saveAsTable("temp.file_extraction_log")
 
 
-from pyspark.sql.functions import col, pandas_udf
-import os
+import mlflow.deployments
 
-# Read your delta table
-table_name = "your_catalog.your_schema.your_table"
-df = spark.read.format("delta").table(table_name)
+deploy_client = mlflow.deployments.get_deploy_client("databricks")
 
-# Define the base volume path
-volume_base = "/Volumes/your_catalog/your_schema/sharepoint_files_volume"
+user_query = "What is the purchase number of alice and where does he live ?"
 
-# Use a Pandas UDF for batch processing and better performance
-@pandas_udf("string")
-def save_to_volume_udf(content_series, metadata_series):
-    paths = []
-    for content, metadata in zip(content_series, metadata_series):
-        filename = metadata['name']
-        ext = filename.split('.')[-1].lower() if '.' in filename else 'unknown'
-        folder = os.path.join(volume_base, ext)
-        os.makedirs(folder, exist_ok=True)
-        file_path = os.path.join(folder, filename)
-        with open(file_path, "wb") as f:
-            f.write(content)
-        paths.append(file_path)
-    return pd.Series(paths)
+response = deploy_client.predict(endpoint= EMBEDDINGS_ENDPOINT, inputs = {"input": [user_query]})
+embeddings = [e['embedding'] for e in response.data]
+print(embeddings)
 
-# Apply the UDF
-df = df.withColumn(
-    "saved_path",
-    save_to_volume_udf(col("content"), col("file_metadata"))
-)
 
-df.select("file_id", "file_metadata.name", "saved_path").show(truncate=False)
+
+results = vsc.get_index(endpoint_name=ENDPOINT_NAME, index_name=vsi_index_name).similarity_search(
+    query_vector = embeddings[0],
+    columns=["chunk_text","file_name","chunk_id"],
+    num_results = 3)
+
+passages = []
+for doc in results.get('result',{}).get('data_array', []):
+    new_doc = {"file": doc[1], "text": doc[0], "chunk_id": doc[2], "score": doc[3]}
+    passages.append(new_doc)
+pprint.pprint(passages)
