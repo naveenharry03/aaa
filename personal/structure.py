@@ -62,3 +62,26 @@ project_root/
 ├── main.py                     # Entry point: runs DSPy flow
 ├── requirements.txt
 └── README.md
+
+
+  Your Vision (Recap)
+Flexible, Modular, and Extensible Framework:
+The system should be adaptable to new technologies, LLMs, and data sources, not locked into any single provider or approach.
+Generic Prompting Layer:
+Use DSPy to create prompts that work across multiple LLMs, not just one.
+Agentic Architecture:
+Each data source (SharePoint, ServiceNow, etc.) has its own agent. A master agent coordinates these child agents, combining their outputs and making decisions.
+MCP (Multi-Component Processing):
+The system should be able to call tools, agents, or other components to attempt automated fixes, and if not possible, generate documentation or instructions for the user.
+LangGraph as the Orchestration Layer:
+Use LangGraph to manage the flow, state, and agent interactions. Open to other suggestions if they fit better.
+End-to-End Automation:
+When a pipeline fails, the system should:
+Gather failed logs from all relevant sources.
+Use agents/validators to find the most relevant context and possible fixes.
+Attempt automated fixes via tools/MCP.
+If fixed, re-run the pipeline and report the outcome.
+If not, generate and send actionable documentation to the user.
+Always keep the user in the loop with clear, detailed emails.
+Goal:
+Dramatically reduce troubleshooting time for data engineers.
