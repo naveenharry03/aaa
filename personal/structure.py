@@ -215,3 +215,47 @@ def process_user_question(question):
 # Example
 result = process_user_question("What is the customer ID for Alice and where does he live and what is the age of charlie?")
 print(result)
+
+
+
+from databricks import sql
+import os
+
+# Set up connection parameters
+server_hostname = "your-workspace-url.cloud.databricks.com"  # Your workspace URL
+http_path = "/sql/1.0/warehouses/your-warehouse-id"  # Your SQL warehouse HTTP path
+access_token = "your-personal-access-token"  # Your PAT token
+
+# Alternative: Use environment variables for security
+# server_hostname = os.getenv("DATABRICKS_SERVER_HOSTNAME")
+# http_path = os.getenv("DATABRICKS_HTTP_PATH") 
+# access_token = os.getenv("DATABRICKS_TOKEN")
+
+# Connect to Databricks
+connection = sql.connect(
+    server_hostname=server_hostname,
+    http_path=http_path,
+    access_token=access_token
+)
+
+# Execute your query
+cursor = connection.cursor()
+catalog_name = "your_catalog"  # Replace with your catalog
+schema_name = "your_schema"    # Replace with your schema
+table_name = "sample_naveen"
+
+query = f"SELECT * FROM {catalog_name}.{schema_name}.{table_name}"
+cursor.execute(query)
+
+# Fetch and display results
+results = cursor.fetchall()
+columns = [desc[0] for desc in cursor.description]
+
+# Convert to pandas DataFrame for better display
+import pandas as pd
+df = pd.DataFrame(results, columns=columns)
+print(df)
+
+# Close connection
+cursor.close()
+connection.close()
