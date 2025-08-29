@@ -259,3 +259,169 @@ print(df)
 # Close connection
 cursor.close()
 connection.close()
+
+``````````````````````````````````````````````````````````````
+
+def send_email_via_logic_app(
+    self,
+    error_message: str,
+    suggestion: str,
+    workspace_name: str,
+    workspace_link: str,
+    job_name: str,
+    job_link: str,
+    job_run_id: str,
+    job_run_link: str,
+    task_run_name: str,
+    task_run_link: str,
+    status: str,
+    started_at: str,
+    duration: str,
+    launched_by: str,
+    view_run_link: str
+):
+    import requests
+
+    logic_app_email_url = "https://sendemailwithllmsuggestion.azurewebsites.net:443/..."  # Replace with yours
+
+    # map status with color + icons
+    status_icon = "❌" if status.lower() == "failed" else "✅"
+    status_color = "#b00020" if status.lower() == "failed" else "#228B22"   # red or green
+
+    html_body = f"""
+    <html>
+        <body style="font-family:Arial, sans-serif; color:#333;">
+            <h2 style="color:{status_color};">{status_icon} A job run has terminated with the error: in Azure Databricks</h2>
+            
+            <p><strong>Message:</strong><br>
+            <span style="color:{status_color};">&#x26A0; {error_message}</span></p>
+
+            <h3>Run details</h3>
+            <table cellspacing="0" cellpadding="6" style="border-collapse:collapse; width:100%;">
+                <tr>
+                    <td style="font-weight:bold; width:150px;">Workspace</td>
+                    <td><a href="{workspace_link}">{workspace_name}</a></td>
+                </tr>
+                <tr>
+                    <td style="font-weight:bold;">Job</td>
+                    <td><a href="{job_link}">{job_name}</a></td>
+                </tr>
+                <tr>
+                    <td style="font-weight:bold;">Job run</td>
+                    <td><a href="{job_run_link}">{job_run_id}</a></td>
+                </tr>
+                <tr>
+                    <td style="font-weight:bold;">Task run</td>
+                    <td><a href="{task_run_link}">{task_run_name}</a></td>
+                </tr>
+                <tr>
+                    <td style="font-weight:bold;">Status</td>
+                    <td style="color:{status_color};">{status_icon} {status}</td>
+                </tr>
+                <tr>
+                    <td style="font-weight:bold;">Started at</td>
+                    <td>{started_at}</td>
+                </tr>
+                <tr>
+                    <td style="font-weight:bold;">Duration</td>
+                    <td>{duration}</td>
+                </tr>
+                <tr>
+                    <td style="font-weight:bold;">Launched</td>
+                    <td>{launched_by}</td>
+                </tr>
+            </table>
+
+            <br>
+            <p>
+                <a href="{view_run_link}" 
+                   style="display:inline-block; padding:10px 20px; background:#0078d4; color:white; 
+                          text-decoration:none; border-radius:4px;">
+                   View run in Databricks &gt;
+                </a>
+            </p>
+
+            <hr>
+            <p><strong>Suggestion:</strong><br>{suggestion}</p>
+        </body>
+    </html>
+    """
+
+    payload = {
+        "subject": f"Databricks Job {status} Alert",
+        "body": html_body
+    }
+
+    response = requests.post(logic_app_email_url, json=payload)
+    return f"📧 Logic App Email Status: {response.status_code} - {response.text}"
+
+
+    `````````````````````````````
+
+    def send_email_via_logic_app(self, error_message: str, suggestion: str):
+    import requests
+
+    logic_app_email_url = "https://sendemailwithllmsuggestion.azurewebsites.net:443/..."  # your endpoint
+
+    # HTML email body
+    html_body = f"""
+    <html>
+        <body style="font-family:Arial, sans-serif; color:#333;">
+            <h2 style="color:#b00020;">❌ A job run has terminated with the error: in Azure Databricks</h2>
+            <p><strong>Message:</strong><br>
+            <span style="color:#b00020;">&#x26A0; {error_message}</span></p>
+
+            <h3>Run details</h3>
+            <table cellspacing="0" cellpadding="6" style="border-collapse:collapse; width:100%;">
+                <tr>
+                    <td style="font-weight:bold; width:150px;">Workspace</td>
+                    <td><a href="https://placeholder.workspace.link">CDS-DS-DATABRICKS-001-D</a></td>
+                </tr>
+                <tr>
+                    <td style="font-weight:bold;">Job</td>
+                    <td><a href="https://placeholder.job.link">Databricks Diagnostics One Model</a></td>
+                </tr>
+                <tr>
+                    <td style="font-weight:bold;">Job run</td>
+                    <td><a href="https://placeholder.jobrun.link">940987857908224</a></td>
+                </tr>
+                <tr>
+                    <td style="font-weight:bold;">Task run</td>
+                    <td><a href="https://placeholder.taskrun.link">Databricks_Failure_Log_One_Model</a></td>
+                </tr>
+                <tr>
+                    <td style="font-weight:bold;">Status</td>
+                    <td style="color:#b00020;">❌ Failed</td>
+                </tr>
+                <tr>
+                    <td style="font-weight:bold;">Started at</td>
+                    <td>2025-08-26 12:49:43 UTC</td>
+                </tr>
+                <tr>
+                    <td style="font-weight:bold;">Duration</td>
+                    <td>16s</td>
+                </tr>
+                <tr>
+                    <td style="font-weight:bold;">Launched</td>
+                    <td>By retry scheduler</td>
+                </tr>
+            </table>
+
+            <br>
+            <p><a href="https://placeholder.viewrun.link" 
+                  style="display:inline-block; padding:10px 20px; background:#0078d4; color:white; 
+                         text-decoration:none; border-radius:4px;">View run in Databricks &gt;</a></p>
+
+            <hr>
+            <p><strong>Suggestion:</strong><br>{suggestion}</p>
+        </body>
+    </html>
+    """
+
+    payload = {
+        "subject": "Databricks Job Failure Alert",
+        "body": html_body
+    }
+
+    response = requests.post(logic_app_email_url, json=payload)
+    return f"📧 Logic App Email Status: {response.status_code} - {response.text}"
