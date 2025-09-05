@@ -425,3 +425,235 @@ def send_email_via_logic_app(
 
     response = requests.post(logic_app_email_url, json=payload)
     return f"📧 Logic App Email Status: {response.status_code} - {response.text}"
+
+
+
+
+
+
+
+
+
+
+
+
+
+1````````````````````````````````````````````````````````````````````````````
+
+PIPELINE_ERROR_AGENT_PROMPT = """
+You are an expert Pipeline Error Analysis Agent specialized in Databricks pipeline troubleshooting.
+
+STRICT EXECUTION SEQUENCE (DO NOT VIOLATE):
+1. FIRST ACTION (MANDATORY): save_ai_suggestion
+   - Generate a complete AI suggestion **in structured format**:
+     Root Cause: [Explain the error cause clearly]
+     Approach: [Method of analyzing or investigating the issue]
+     Solution Steps: [Step-by-step remediation steps]
+   - Then save this section to Delta table using save_ai_suggestion.
+
+2. REMEDIATION ACTIONS (1–2 ONLY): 
+   - Choose the most relevant remediation tool(s) based on your AI suggestion output.
+   - If first remediation succeeds → immediately send email with details.
+   - If it fails → acknowledge failure, continue with next remediation.
+   - If both remediations fail → send email describing AI suggestions + attempted actions, ask for manual follow-up.
+   - NEVER retry the same action in a loop.
+
+3. FINAL ACTION (MANDATORY): save_ai_actions
+   - Save the exact list of actions performed (success/failure included).
+
+IMPORTANT RULES:
+- ALWAYS begin with save_ai_suggestion (default first action).
+- ALWAYS end with save_ai_actions (default last action).
+- STRICTLY follow structured format for AI Suggestion (Root Cause, Approach, Solution Steps).
+- Mail should only be sent after:
+   * FIRST SUCCESSFUL remediation OR
+   * After two failed remediations → with summary of failures.
+
+AVAILABLE REMEDIATION TOOLS:
+{tools}
+
+Tool Names:
+{tool_names}
+
+STRICT RESPONSE FORMAT (must always follow):
+Thought: [Analysis or reasoning for current step]
+Action: [Tool name]
+Action Input: [Input passed to tool]
+Observation: [Result from tool]
+
+Final Answer: [Clear summary of AI suggestions, remediation results, and final conclusion]
+"""
+
+
+
+
+actions
+```````
+def _save_ai_suggestion(self, ai_suggestion: str) -> str:
+    """Save AI suggestion (root cause, approach, solution steps) into Delta"""
+    try:
+        # Validation
+        if not self.workspace_client:
+            return "❌ Cannot save suggestion: Workspace client not available"
+        if not self.current_run_id:
+            return "❌ Cannot save suggestion: No run_id set"
+
+        # Table config
+        catalog_name = "udm_tests"
+        schema_name = "cdmebxpost"
+        table_name = "classified_errors_new"
+        warehouse_id = "aa8ca9405a7cb961"
+
+        # Ensure mandatory structure
+        if not all(x in ai_suggestion for x in ["Root Cause:", "Approach:", "Solution Steps:"]):
+            ai_suggestion = f"""
+            Root Cause: [Missing root cause info, please improve prompt]
+            Approach: [Missing approach info, please improve prompt]
+            Solution Steps: {ai_suggestion.strip()}
+            """
+
+        cleaned_suggestion = ai_suggestion.replace("'", "''").strip()
+
+        update_sql = f"""
+        UPDATE {catalog_name}.{schema_name}.{table_name}
+        SET ai_suggestion = '{cleaned_suggestion}',
+            is_processed = true,
+            processed_timestamp = current_timestamp()
+        WHERE run_id = '{self.current_run_id}'
+        AND (is_processed = false OR is_processed IS NULL)
+        """
+
+        logger.info(f"Saving AI suggestion for run_id {self.current_run_id}")
+        result = self.workspace_client.statement_execution.execute_statement(
+            statement=update_sql, warehouse_id=warehouse_id
+        )
+
+        if result.status.state._name_ == 'SUCCEEDED':
+            return f"✅ AI suggestion saved successfully for run {self.current_run_id}"
+        return f"❌ Failed to save AI suggestion. Query status: {result.status.state._name_}"
+
+    except Exception as e:
+        logger.error(f"Error saving AI suggestion: {str(e)}")
+        return f"❌ Error saving AI suggestion: {str(e)}"
+
+
+  def _save_ai_actions(self, actions_performed: list) -> str:
+    """
+    Save list of actions performed with their status into Delta.
+    Example: ["retry_pipeline:failed", "switch_cluster:success"]
+    """
+    try:
+        if not self.workspace_client:
+            return "❌ Cannot save actions: Workspace client not available"
+        if not self.current_run_id:
+            return "❌ Cannot save actions: No run_id set"
+
+        catalog_name = "udm_tests"
+        schema_name = "cdmebxpost"
+        table_name = "classified_errors_new"
+        warehouse_id = "aa8ca9405a7cb961"
+
+        cleaned_actions = ",".join([a.replace("'", "''") for a in actions_performed])
+
+        update_sql = f"""
+        UPDATE {catalog_name}.{schema_name}.{table_name}
+        SET ai_actions = '{cleaned_actions}',
+            processed_timestamp = current_timestamp()
+        WHERE run_id = '{self.current_run_id}'
+        AND is_processed = true
+        """
+
+        logger.info(f"Saving AI actions for run_id {self.current_run_id}")
+        result = self.workspace_client.statement_execution.execute_statement(
+            statement=update_sql, warehouse_id=warehouse_id
+        )
+
+        if result.status.state._name_ == 'SUCCEEDED':
+            return f"✅ AI actions saved successfully for run {self.current_run_id}"
+        return f"❌ Failed to save AI actions. Status: {result.status.state._name_}"
+
+    except Exception as e:
+        logger.error(f"Error saving AI actions: {str(e)}")
+        return f"❌ Error saving AI actions: {str(e)}"
+
+
+
+    def retry_pipeline(self, action_input: str = None) -> str:
+    run_id = self.current_run_id
+    if not run_id:
+        return "❌ retry_pipeline: No run_id available"
+
+    try:
+        warehouse_id = "aa8ca9405a7cb961"
+        sql_query = f"SELECT job_id FROM udm_tests.cdmebxpost.all_runs_status WHERE run_id = '{run_id}' LIMIT 1"
+        
+        result = self.workspace_client.statement_execution.execute_statement(
+            statement=sql_query, warehouse_id=warehouse_id
+        )
+
+        if result.status.state._name_ != 'SUCCEEDED' or not result.result.data_array:
+            return f"❌ retry_pipeline: No job_id found for run_id {run_id}"
+
+        job_id = result.result.data_array[0][0]
+        run = self.workspace_client.jobs.run_now(job_id=job_id)
+
+        return f"✅ retry_pipeline: Triggered job {job_id} for run_id {run_id}, new run {run.run_id}"
+
+    except Exception as e:
+        logger.error(f"retry_pipeline error: {str(e)}")
+        return f"❌ retry_pipeline failed: {str(e)}"
+
+
+      def send_email_via_logic_app(self, status="FAILED", ai_suggestion=None, ai_actions=None) -> str:
+    try:
+        # Format AI suggestion
+        formatted_html = self.format_text_to_html(ai_suggestion or "None")
+
+        payload = {
+            "subject": f"Databricks Job {status} Alert",
+            "body": f"""
+            <html>
+            <body>
+              <h2 style="color:#0078d4;">Databricks Job {status}</h2>
+              <h3>AI Suggestion</h3>
+              {formatted_html}
+              <h3>AI Actions Performed</h3>
+              <p>{ai_actions or 'None'}</p>
+            </body>
+            </html>
+            """
+        }
+
+        response = requests.post(self.logic_app_url, json=payload)
+        return f"📨 Email sent: {response.status_code} {response.text}"
+
+    except Exception as e:
+        logger.error(f"Error sending email: {str(e)}")
+        return f"❌ Failed to send email: {str(e)}"
+
+
+      def format_text_to_html(self, text: str) -> str:
+    """Ensure suggestion text is always structured with headers + steps"""
+    if not text or not text.strip():
+        return "<p>No suggestion available</p>"
+
+    html = ""
+    parts = {"Root Cause:": "", "Approach:": "", "Solution Steps:": ""}
+
+    for key in parts.keys():
+        if key in text:
+            section = text.split(key, 1)[1]
+            next_keys = [k for k in parts.keys() if k != key and k in section]
+            if next_keys:
+                # Take until next section
+                next_key = min(section.find(k) for k in next_keys if section.find(k) != -1)
+                section = section[:next_key]
+            parts[key] = section.strip()
+
+    for key, value in parts.items():
+        if key == "Solution Steps:":
+            html += f"<h3>{key}</h3>{self.format_numbered_steps(value)}"
+        else:
+            html += f"<h3>{key}</h3><p>{value}</p>"
+
+    return html
