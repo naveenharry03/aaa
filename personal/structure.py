@@ -657,3 +657,145 @@ def _save_ai_suggestion(self, ai_suggestion: str) -> str:
             html += f"<h3>{key}</h3><p>{value}</p>"
 
     return html
+
+
+
+
+
+
+
+
+
+    ````````````````````````````````````````````````````````````````
+
+    def format_text_to_html(self, suggestion: dict) -> str:
+    """
+    Convert structured AI suggestion (dict) into formatted HTML.
+    suggestion = {
+       "Root Cause": "...",
+       "Approach": "...",
+       "Solution Steps": "1) step one 2) step two"
+    }
+    """
+    if not suggestion or not isinstance(suggestion, dict):
+        return "<p>No AI Suggestions available</p>"
+
+    html = ""
+
+    # Root Cause
+    root = suggestion.get("Root Cause", "").strip()
+    if root:
+        html += f"<h3>Root Cause</h3><p>{root}</p>"
+
+    # Approach
+    approach = suggestion.get("Approach", "").strip()
+    if approach:
+        html += f"<h3>Approach</h3><p>{approach}</p>"
+
+    # Solution Steps
+    steps = suggestion.get("Solution Steps", "").strip()
+    if steps:
+        html += f"<h3>Solution Steps</h3>{self.format_numbered_steps(steps)}"
+
+    return html or "<p>No valid suggestion found</p>"
+
+
+def format_actions_to_html(self, ai_actions: list) -> str:
+    """
+    Convert list of AI actions into HTML.
+    ai_actions = [
+       {"action": "retry_pipeline", "status": "failed", "message": "No job found"},
+       {"action": "switch_cluster", "status": "success", "message": "Switched cluster and restarted job"}
+    ]
+    """
+    if not ai_actions or not isinstance(ai_actions, list):
+        return "<p>No remediation actions recorded</p>"
+
+    html = "<h3>AI Actions Taken</h3><ol>"
+    for a in ai_actions:
+        action = a.get("action", "unknown")
+        status = a.get("status", "unknown")
+        message = a.get("message", "")
+        status_icon = "✅" if status.lower() == "success" else "❌"
+        html += f"<li>{status_icon} <b>{action}</b> → {status}<br><small>{message}</small></li>"
+    html += "</ol>"
+
+    return html
+
+
+
+
+    def format_numbered_steps(self, steps_text: str) -> str:
+    """
+    Extract and format numbered steps from plain text into <ol>.
+    Handles inputs like "1) step one, 2) step two" or "1. step one 2. step two".
+    """
+    if not steps_text:
+        return "<p>No steps provided</p>"
+
+    parts = re.split(r"(?:\d+\)|\d+\.)", steps_text)
+    steps = [p.strip() for p in parts if p.strip()]
+
+    if steps:
+        html = "<ol>"
+        for step in steps:
+            html += f"<li>{step}</li>"
+        html += "</ol>"
+        return html
+
+    return f"<p>{steps_text}</p>"
+
+
+    def format_paragraphs(self, text: str) -> str:
+    """
+    Break long text into paragraphs for better readability.
+    """
+    if not text:
+        return "<p>No content</p>"
+
+    sentences = text.split(". ")
+    paragraphs, current_para = [], []
+
+    for i, s in enumerate(sentences):
+        sentence = s.strip()
+        if not sentence:
+            continue
+        if not sentence.endswith("."):
+            sentence += "."
+        current_para.append(sentence)
+
+        if len(current_para) >= 2:
+            paragraphs.append(" ".join(current_para))
+            current_para = []
+
+    if current_para:
+        paragraphs.append(" ".join(current_para))
+
+    html = ""
+    for p in paragraphs:
+        html += f'<p style="margin-bottom:12px; line-height:1.5;">{p}</p>'
+
+    return html
+
+    def send_email_via_logic_app(self, status="FAILED", ai_suggestion=None, ai_actions=None):
+    try:
+        # ai_suggestion = dict
+        suggestion_html = self.format_text_to_html(ai_suggestion or {})
+        # ai_actions = list of dict
+        actions_html = self.format_actions_to_html(ai_actions or [])
+
+        payload = {
+            "subject": f"Databricks Job {status} Alert",
+            "body": f"""
+            <html><body>
+              <h2 style='color:#0078d4;'>Databricks Job {status}</h2>
+              {suggestion_html}
+              {actions_html}
+            </body></html>
+            """
+        }
+        response = requests.post(self.logic_app_url, json=payload)
+        return f"📨 Email sent: {response.status_code} {response.text}"
+
+    except Exception as e:
+        return f"❌ Email failed: {str(e)}"
