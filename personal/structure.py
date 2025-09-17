@@ -995,3 +995,120 @@ Do NOT copy the same tool sequence. Choose tools dynamically based on the actual
 Question: {input}
 Thought: {agent_scratchpad}
 """
+
+
+
+````````````````````````````````````````````
+sample = """
+---
+DocumentType: JobFailureReport
+DocumentVersion: 1.0.0
+CreatedBy: siva.kumar@example.com
+CreatedAt: 2025-09-17T08:45:12Z
+Environment: prod
+TeamOwner: DataEngineering
+DatabricksJobID: job-12345
+DatabricksRunID: run-20250917-01
+ServiceNowTicket: SNOW-2025-234
+Severity: High
+FailureType: Timeout
+Tags: databricks,parquet,schema-regression
+DataSensitivity: Internal
+Filename: prod_DataEngineering_JobFailureReport_job-12345_20250917_v1.0.0.md
+---
+### Job Failure Report — Sample (for SharePoint)
+
+#### Metadata
+- DocumentType: JobFailureReport
+- DocumentVersion: 1.0.0
+- CreatedBy: siva.kumar@example.com
+- CreatedAt: 2025-09-17T08:45:12Z
+- Environment: prod
+- TeamOwner: DataEngineering
+- DatabricksJobID: job-12345
+- DatabricksRunID: run-20250917-01
+- ServiceNowTicket: SNOW-2025-234
+- Severity: High
+- FailureType: Timeout
+- Tags: databricks, parquet, schema-regression
+- DataSensitivity: Internal
+
+#### Short summary
+A scheduled Databricks job (job-12345) timed out while processing parquet partition date=2025-09-17, delaying downstream analytics dashboards by approximately 3 hours.
+
+#### Full description
+At 2025-09-17T07:30:00Z the nightly run for job-12345 started. Around 07:33:14Z multiple executors began failing with TaskKilled and network timeout errors. The driver retried tasks until the job ultimately timed out at 08:40:00Z. Affected dataset: s3://prod-bucket/data/events/date=2025-09-17. Business impact: nightly dashboards were not refreshed and dependent pipelines experienced delays.
+
+#### Reproduction steps
+1. Trigger job-12345 with partition date=2025-09-17 via the scheduler.
+2. Monitor stage 4 map tasks processing parquet files — failures typically appear within 2–4 minutes of task start.
+3. Inspect executor and driver logs for GC pauses and network timeout traces.
+
+#### Logs & Artifacts
+- Error snippet (excerpted from executor logs; timestamps aligned with failures):
+    java.util.concurrent.TimeoutException: Task timed out after 120000 ms
+        at com.databricks.spark...
+        at org.apache.spark.scheduler.Task...
+        at org.apache.spark.executor.Executor...
+
+- Full logs (compressed): /RAG-Context/sharepoint/prod/DataEngineering/databricks/job-failures/prod_DataEngineering_JobFailureReport_job-12345_20250917_v1.0.0_logs.txt
+- Cluster config: 8 workers (r5.2xlarge), spark.executor.memory=30g, spark.executor.cores=4
+- Job config: attached job-12345-config.json (link in attachments)
+- Sample failing input path: s3://prod-bucket/data/events/date=2025-09-17/part-0001.parquet
+- GC log excerpt: long young-gen pauses observed at 07:33:10Z–07:33:40Z aligned to task failures
+
+#### Root cause analysis
+Hypothesis: Upstream schema drift introduced nested field type changes in parquet files for column "event.details", increasing deserialization cost and causing extended GC pauses which led to task timeouts. Evidence: parquet footers show mismatched types for "event.details", GC logs show long young-gen pauses that correlate with task failures, and executor heap usage spikes before timeout events.
+
+#### Mitigation & Recommended Fixes
+- Short-term (P0): Re-run the job with increased executor memory and extended task timeout; temporarily reroute downstream refresh to the last successful snapshot. Owner: DataEngineering. ETA: 2 hours.
+- Medium-term (P1): Add schema enforcement and pre-job schema validation step in ingestion pipeline; add alerting for schema drift. Owner: IngestionTeam. ETA: 2 weeks.
+- Long-term (P2): Implement schema-regression tests for producers, producer-side schema checks, and automated blocking of incompatible schema writes. Owner: Platform. ETA: 1 quarter.
+
+#### Related items & references
+- ServiceNow: SNOW-2025-234 — https://servicenow.example.com/SNOW-2025-234
+- PR: https://github.com/org/repo/pull/456
+- Dataset contract: /datasets/events/contract.md
+- Monitoring alert: grafana.company/alerts/alert-789
+
+#### Search keywords
+databricks, job-12345, timeout, parquet, schema-drift, gc, task-timeout
+
+#### RAG context snippet
+Job job-12345 (prod) timed out on 2025-09-17 while processing parquet partition date=2025-09-17. Logs indicate a schema mismatch for column "event.details" and prolonged GC pauses; immediate recommendation is to re-run with larger executors and increase task timeouts while implementing upstream schema validation.
+
+#### Chunking & Embedding hints
+- Suggested chunk size: 400–800 words per chunk
+- Preferred split boundaries: split after Logs & Artifacts, after Reproduction steps, after Mitigation
+- EmbeddingVersion: v1.0
+
+#### File naming convention (used)
+prod_DataEngineering_JobFailureReport_job-12345_20250917_v1.0.0.md
+
+#### Folder (SharePoint)
+ /RAG-Context/sharepoint/prod/DataEngineering/databricks/job-failures/prod_DataEngineering_JobFailureReport_job-12345_20250917_v1.0.0.md
+
+#### Access & Permissions
+- Read: DataEngineering, Analytics, Platform
+- Edit: DataEngineering
+- Retention policy: 1 year
+- PII present: No
+
+#### Version history & change log
+- v1.0.0 — siva.kumar — 2025-09-17 — initial upload
+
+#### Checklist before upload
+- [x] Metadata filled
+- [x] Filename follows pattern
+- [x] Document placed in correct folder
+- [x] Log snippets & links included
+- [x] RAG context snippet present
+- [x] Sensitive data redacted or flagged (none)
+
+#### Notes / uploader guidance
+- Keep raw logs as separate attachments (link them under Logs & Artifacts) and keep only key excerpts in the main document to keep RAG snippets concise.
+- Ensure the YAML frontmatter remains at the very top of the file for automated parsers.
+- Use the exact filename and folder structure to allow ingestion pipelines to map documents to Databricks Job IDs and ServiceNow tickets.
+- Flag any PII explicitly and avoid pasting PII directly into logs or samples.
+
+"""
