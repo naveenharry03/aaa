@@ -529,47 +529,48 @@ def search_tables_via_sql(catalog: str, schema: str, q: str, limit: int = 50) ->
 
 
 
+# app.py
+import logging
+import os
+from typing import List, Dict, Optional
 
-from databricks.sdk.service.sql import StatementParameter, ParameterValue
-
-def search_tables_via_sql(...):
-    ...
-    params = [
-        StatementParameter(name="p1", value=ParameterValue(string_value=catalog)),
-        StatementParameter(name="p2", value=ParameterValue(string_value=schema)),
-        StatementParameter(name="p3", value=ParameterValue(string_value=(q.lower() + "%"))),
-        StatementParameter(name="p4", value=ParameterValue(long_value=limit)),
-    ]
-    res = w.statement_execution.execute_statement(
-        warehouse_id=WAREHOUSE_ID,
-        catalog="system",
-        schema="information_schema",
-        statement="""
-            SELECT table_name
-            FROM system.information_schema.tables
-            WHERE catalog_name = ? AND schema_name = ? AND lower(table_name) LIKE ?
-            ORDER BY table_name
-            LIMIT ?
-        """,
-        parameters=params,
-        wait_timeout="60s",
-        on_wait_timeout="CANCEL",
-    )
-
-
-
-
-
-`````````````````
-import pandas as pd
+import streamlit as st
+from streamlit_chat import message  # pip install streamlit-chat
+from databricks.sdk import WorkspaceClient
 from databricks.sdk.service.sql import StatementState
+import pandas as pd
 
-def run_sql_to_pandas(sql: str, catalog: str, schema: str):
-    """
-    Execute a SQL statement and return a Pandas DataFrame.
-    Works across SDK versions by polling state and downloading chunks.
-    Requires WAREHOUSE_ID.
-    """
+from model_serving_utils import query_endpoint, is_endpoint_supported
+
+# ---------------- Logging ----------------
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("dlt_explorer")
+
+# ---------------- Clients & Env ----------------
+w = WorkspaceClient()
+
+SERVING_ENDPOINT = os.getenv("SERVING_ENDPOINT")
+assert SERVING_ENDPOINT, "SERVING_ENDPOINT must be set."
+
+WAREHOUSE_ID = os.getenv("DATABRICKS_WAREHOUSE_ID")
+if not WAREHOUSE_ID:
+    logger.warning("DATABRICKS_WAREHOUSE_ID is not set. Sampling and SQL queries will be disabled.")
+
+endpoint_supported = is_endpoint_supported(SERVING_ENDPOINT)
+
+# ---------------- Cache helpers ----------------
+@st.cache_data(show_spinner=False, ttl=300)
+def list_catalogs() -> List[str]:
+    return sorted([c.name for c in w.catalogs.list()])
+
+@st.cache_data(show_spinner=False, ttl=300)
+def list_schemas(catalog: str) -> List[str]:
+    if not catalog:
+        return []
+    return sorted([s.name for s in w.schemas.list(catalog_name=catalog)])
+
+# ---------------- SQL helper -> pandas ----------------
+def run_sql_to_pandas(sql: str, catalog: str, schema: str) -> Optional[pd.DataFrame]:
     if not WAREHOUSE_ID:
         return None
 
@@ -578,11 +579,11 @@ def run_sql_to_pandas(sql: str, catalog: str, schema: str):
         catalog=catalog,
         schema=schema,
         statement=sql,
-        wait_timeout="0s",          # we'll poll ourselves
-        on_wait_timeout="CONTINUE", # don't cancel
+        wait_timeout="0s",
+        on_wait_timeout="CONTINUE",
     )
-
     sid = resp.statement_id
+
     # Poll until terminal state
     while True:
         s = w.statement_execution.get_statement(statement_id=sid)
@@ -594,45 +595,192 @@ def run_sql_to_pandas(sql: str, catalog: str, schema: str):
     if final.status.state != StatementState.SUCCEEDED:
         raise RuntimeError(f"SQL failed: {final.status.state} - {final.status.error_message}")
 
-    # Download all result chunks
-    chunks = []
-    next_chunk = final.result.first_chunk_id
-    while next_chunk:
-        data_chunk = w.statement_execution.get_result_chunk_n(
-            statement_id=sid,
-            chunk_index=next_chunk,
-        )
-        # Convert chunk to rows of python values
-        cols = [c.name for c in final.result.schema.columns]
-        for row in data_chunk.data_array:
-            chunks.append(dict(zip(cols, [v.get(list(v.keys())[0]) if isinstance(v, dict) else v for v in row])))
-        next_chunk = data_chunk.next_chunk_index
+    cols = [c.name for c in final.result.schema.columns]
+    rows = []
+    chunk_idx = final.result.first_chunk_id
+    while chunk_idx is not None:
+        chunk = w.statement_execution.get_result_chunk_n(statement_id=sid, chunk_index=chunk_idx)
+        for row in chunk.data_array:
+            # Convert each cell dict to primitive
+            flat = []
+            for cell in row:
+                if isinstance(cell, dict) and cell:
+                    flat.append(next(iter(cell.values())))
+                else:
+                    flat.append(cell)
+            rows.append(flat)
+        chunk_idx = chunk.next_chunk_index
 
-    return pd.DataFrame(chunks)
+    return pd.DataFrame(rows, columns=cols)
 
+def get_table_schema(catalog: str, schema: str, table: str) -> List[Dict[str, str]]:
+    """Use catalog API to get column metadata."""
+    tinfo = w.tables.get(f"{catalog}.{schema}.{table}")
+    cols = []
+    if getattr(tinfo, "columns", None):
+        for c in tinfo.columns:
+            cols.append({
+                "name": c.name,
+                "type": (getattr(c, "type_text", None) or getattr(c, "type_name", None) or "unknown"),
+                "nullable": str(getattr(c, "nullable", True)),
+            })
+    return cols
 
-def _escape_like(s: str) -> str:
-    return s.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_").lower()
-
-def search_tables_via_sql(catalog: str, schema: str, q: str, limit: int = 50) -> List[str]:
-    if not (WAREHOUSE_ID and catalog and schema and q and len(q) >= 3):
-        return []
-    like_prefix = _escape_like(q) + "%"
-    sql = f"""
-    SELECT table_name
-    FROM system.information_schema.tables
-    WHERE catalog_name = '{catalog}'
-      AND schema_name = '{schema}'
-      AND lower(table_name) LIKE '{like_prefix}' ESCAPE '\\'
-    ORDER BY table_name
-    LIMIT {int(limit)}
-    """
-    df = run_sql_to_pandas(sql, catalog="system", schema="information_schema")
-    return df["table_name"].tolist() if df is not None and not df.empty else []
-
-
-def get_table_sample(catalog: str, schema: str, table: str, limit: int = 100):
-    if not WAREHOUSE_ID:
-        return None
+def get_table_sample(catalog: str, schema: str, table: str, limit: int = 100) -> Optional[pd.DataFrame]:
     sql = f"SELECT * FROM `{catalog}`.`{schema}`.`{table}` LIMIT {int(limit)}"
     return run_sql_to_pandas(sql, catalog=catalog, schema=schema)
+
+# ---------------- Streamlit page config ----------------
+st.set_page_config(
+    page_title="DLT Explorer & Chat",
+    page_icon="🤖",
+    layout="wide",
+    initial_sidebar_state="expanded",
+)
+
+# Custom CSS for a cleaner layout and chat bubbles
+st.markdown(
+    """
+    <style>
+    /* Global */
+    .block-container { padding-top: 1rem; padding-bottom: 1rem; }
+    /* Sidebar styling */
+    section[data-testid="stSidebar"] > div { background: #0f172a; color: #e5e7eb; }
+    section[data-testid="stSidebar"] .stSelectbox label,
+    section[data-testid="stSidebar"] .stTextInput label { color: #cbd5e1 !important; }
+    /* Titles */
+    h1, h2, h3 { letter-spacing: 0.3px; }
+    /* Chat message card tweaks (streamlit-chat) */
+    .stChatMessage { border-radius: 10px; }
+    .user .stMarkdown { background: #e0f2fe; padding: 8px 12px; border-radius: 8px; }
+    .assistant .stMarkdown { background: #f1f5f9; padding: 8px 12px; border-radius: 8px; }
+    /* Dataframes */
+    .stDataFrame { border: 1px solid #e5e7eb; border-radius: 8px; }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
+# ---------------- Guards ----------------
+if not endpoint_supported:
+    st.error(f"The endpoint `{SERVING_ENDPOINT}` is not compatible with this app. Use a chat-completions/agent endpoint.")
+    st.stop()
+
+# ---------------- Session State ----------------
+st.session_state.setdefault("messages", [])  # [{"role":"user"/"assistant","content": str}]
+st.session_state.setdefault("catalog", None)
+st.session_state.setdefault("schema", None)
+st.session_state.setdefault("table_text", "")  # free text
+
+# ---------------- Sidebar ----------------
+with st.sidebar:
+    st.title("⚙️ Configurations")
+
+    catalogs = list_catalogs()
+    st.session_state.catalog = st.selectbox(
+        "Catalog",
+        catalogs,
+        index=catalogs.index(st.session_state.catalog) if st.session_state.catalog in catalogs else 0 if catalogs else None,
+        placeholder="Choose a catalog",
+    )
+
+    schemas = list_schemas(st.session_state.catalog) if st.session_state.catalog else []
+    st.session_state.schema = st.selectbox(
+        "Schema",
+        schemas,
+        index=schemas.index(st.session_state.schema) if st.session_state.schema in schemas else 0 if schemas else None,
+        placeholder="Choose a schema",
+    )
+
+    st.text_input(
+        "Table name (type name only, no catalog/schema)",
+        key="table_text",
+        placeholder="e.g., my_dlt_output_table",
+        help="Enter just the table name. The catalog and schema are taken from the dropdowns above.",
+    )
+
+    st.caption("Tip: The chat will use the selected catalog, schema, and the typed table name.")
+
+    if st.button("Clear chat"):
+        st.session_state.messages = []
+
+# ---------------- Main layout ----------------
+left, right = st.columns([1.2, 1.8], gap="large")
+
+with left:
+    st.title("📚 Table Context")
+    cat = st.session_state.catalog
+    sch = st.session_state.schema
+    tbl = st.session_state.table_text.strip()
+
+    if cat and sch and tbl:
+        fqtn = f"`{cat}`.`{sch}`.`{tbl}`"
+        st.caption(f"Selected table: {fqtn}")
+
+        # Schema
+        try:
+            schema_rows = get_table_schema(cat, sch, tbl)
+            if schema_rows:
+                st.subheader("Schema")
+                st.dataframe(schema_rows, use_container_width=True, hide_index=True)
+            else:
+                st.info("No schema columns found for this table.")
+        except Exception as e:
+            st.warning(f"Could not fetch schema: {e}")
+
+        # Sample rows
+        try:
+            sample_df = get_table_sample(cat, sch, tbl, limit=100)
+            if sample_df is not None:
+                st.subheader("Sample Rows (top 100)")
+                st.dataframe(sample_df, use_container_width=True)
+            else:
+                st.info("Set DATABRICKS_WAREHOUSE_ID to preview sample rows.")
+        except Exception as e:
+            st.warning(f"Could not fetch sample rows: {e}")
+    else:
+        st.info("Select a Catalog, Schema, and type a Table name to view schema and sample rows.")
+
+with right:
+    st.title("💬 Chat")
+
+    # Replay history with streamlit-chat
+    for i, msg in enumerate(st.session_state.messages):
+        message(msg["content"], is_user=(msg["role"] == "user"), key=f"msg_{i}")
+
+    # User input
+    user_text = st.chat_input("Ask about the selected table or request an analysis...")
+    if user_text:
+        if not (st.session_state.catalog and st.session_state.schema and st.session_state.table_text.strip()):
+            st.warning("Please select a catalog, a schema, and enter a table name first.")
+        else:
+            cat, sch, tbl = st.session_state.catalog, st.session_state.schema, st.session_state.table_text.strip()
+            fqtn = f"`{cat}`.`{sch}`.`{tbl}`"
+
+            # Add user message
+            st.session_state.messages.append({"role": "user", "content": user_text})
+            message(user_text, is_user=True, key=f"user_{len(st.session_state.messages)}")
+
+            # Build system context
+            system_ctx = "\n".join([
+                f"User has selected the Unity Catalog table {fqtn}.",
+                "Use this context to answer the user's question. If more details are needed, ask clarifying questions.",
+                "When referencing the table, always use the fully-qualified name.",
+            ])
+            messages_for_model = [{"role": "system", "content": system_ctx}]
+            messages_for_model.extend(st.session_state.messages)
+
+            # Call model
+            try:
+                with st.spinner("Thinking..."):
+                    assistant_response = query_endpoint(
+                        endpoint_name=SERVING_ENDPOINT,
+                        messages=messages_for_model,
+                        max_tokens=400,
+                    )["content"]
+            except Exception as e:
+                assistant_response = f"Error calling endpoint `{SERVING_ENDPOINT}`: {e}"
+
+            # Show assistant response and store
+            message(assistant_response, is_user=False, key=f"assistant_{len(st.session_state.messages)+1}")
+            st.session_state.messages.append({"role": "assistant", "content": assistant_response})
