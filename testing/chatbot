@@ -555,3 +555,84 @@ def search_tables_via_sql(...):
         wait_timeout="60s",
         on_wait_timeout="CANCEL",
     )
+
+
+
+
+
+`````````````````
+import pandas as pd
+from databricks.sdk.service.sql import StatementState
+
+def run_sql_to_pandas(sql: str, catalog: str, schema: str):
+    """
+    Execute a SQL statement and return a Pandas DataFrame.
+    Works across SDK versions by polling state and downloading chunks.
+    Requires WAREHOUSE_ID.
+    """
+    if not WAREHOUSE_ID:
+        return None
+
+    resp = w.statement_execution.execute_statement(
+        warehouse_id=WAREHOUSE_ID,
+        catalog=catalog,
+        schema=schema,
+        statement=sql,
+        wait_timeout="0s",          # we'll poll ourselves
+        on_wait_timeout="CONTINUE", # don't cancel
+    )
+
+    sid = resp.statement_id
+    # Poll until terminal state
+    while True:
+        s = w.statement_execution.get_statement(statement_id=sid)
+        state = s.status.state
+        if state in (StatementState.SUCCEEDED, StatementState.FAILED, StatementState.CANCELED):
+            final = s
+            break
+
+    if final.status.state != StatementState.SUCCEEDED:
+        raise RuntimeError(f"SQL failed: {final.status.state} - {final.status.error_message}")
+
+    # Download all result chunks
+    chunks = []
+    next_chunk = final.result.first_chunk_id
+    while next_chunk:
+        data_chunk = w.statement_execution.get_result_chunk_n(
+            statement_id=sid,
+            chunk_index=next_chunk,
+        )
+        # Convert chunk to rows of python values
+        cols = [c.name for c in final.result.schema.columns]
+        for row in data_chunk.data_array:
+            chunks.append(dict(zip(cols, [v.get(list(v.keys())[0]) if isinstance(v, dict) else v for v in row])))
+        next_chunk = data_chunk.next_chunk_index
+
+    return pd.DataFrame(chunks)
+
+
+def _escape_like(s: str) -> str:
+    return s.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_").lower()
+
+def search_tables_via_sql(catalog: str, schema: str, q: str, limit: int = 50) -> List[str]:
+    if not (WAREHOUSE_ID and catalog and schema and q and len(q) >= 3):
+        return []
+    like_prefix = _escape_like(q) + "%"
+    sql = f"""
+    SELECT table_name
+    FROM system.information_schema.tables
+    WHERE catalog_name = '{catalog}'
+      AND schema_name = '{schema}'
+      AND lower(table_name) LIKE '{like_prefix}' ESCAPE '\\'
+    ORDER BY table_name
+    LIMIT {int(limit)}
+    """
+    df = run_sql_to_pandas(sql, catalog="system", schema="information_schema")
+    return df["table_name"].tolist() if df is not None and not df.empty else []
+
+
+def get_table_sample(catalog: str, schema: str, table: str, limit: int = 100):
+    if not WAREHOUSE_ID:
+        return None
+    sql = f"SELECT * FROM `{catalog}`.`{schema}`.`{table}` LIMIT {int(limit)}"
+    return run_sql_to_pandas(sql, catalog=catalog, schema=schema)
