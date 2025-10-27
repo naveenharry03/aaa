@@ -483,3 +483,75 @@ with right:
             # Show assistant
             message(assistant_response, is_user=False, key=f"assistant_{len(st.session_state.messages)+1}")
             st.session_state.messages.append({"role": "assistant", "content": assistant_response})
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+def _escape_like(s: str) -> str:
+    # Escape % and _ in LIKE and force lowercase prefix
+    return s.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_").lower()
+
+def search_tables_via_sql(catalog: str, schema: str, q: str, limit: int = 50) -> List[str]:
+    if not (WAREHOUSE_ID and catalog and schema and q and len(q) >= 3):
+        return []
+    like_prefix = _escape_like(q) + "%"
+    # We run the query in the context of system.information_schema, so no need to bind params
+    sql = f"""
+    SELECT table_name
+    FROM system.information_schema.tables
+    WHERE catalog_name = '{catalog}'
+      AND schema_name = '{schema}'
+      AND lower(table_name) LIKE '{like_prefix}' ESCAPE '\\'
+    ORDER BY table_name
+    LIMIT {int(limit)}
+    """
+    res = w.statement_execution.execute_statement(
+        warehouse_id=WAREHOUSE_ID,
+        catalog="system",
+        schema="information_schema",
+        statement=sql,
+        wait_timeout="60s",
+        on_wait_timeout="CANCEL",
+    )
+    df = res.as_pandas()
+    return df["table_name"].tolist() if df is not None and not df.empty else []
+
+
+
+
+
+from databricks.sdk.service.sql import StatementParameter, ParameterValue
+
+def search_tables_via_sql(...):
+    ...
+    params = [
+        StatementParameter(name="p1", value=ParameterValue(string_value=catalog)),
+        StatementParameter(name="p2", value=ParameterValue(string_value=schema)),
+        StatementParameter(name="p3", value=ParameterValue(string_value=(q.lower() + "%"))),
+        StatementParameter(name="p4", value=ParameterValue(long_value=limit)),
+    ]
+    res = w.statement_execution.execute_statement(
+        warehouse_id=WAREHOUSE_ID,
+        catalog="system",
+        schema="information_schema",
+        statement="""
+            SELECT table_name
+            FROM system.information_schema.tables
+            WHERE catalog_name = ? AND schema_name = ? AND lower(table_name) LIKE ?
+            ORDER BY table_name
+            LIMIT ?
+        """,
+        parameters=params,
+        wait_timeout="60s",
+        on_wait_timeout="CANCEL",
+    )
