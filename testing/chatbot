@@ -1,0 +1,245 @@
+# app.py
+import logging
+import os
+import re
+from typing import List, Dict, Optional
+
+import streamlit as st
+from databricks.sdk import WorkspaceClient
+from databricks.sdk.service.catalog import ListCatalogsResponseCatalogInfo, ListSchemasResponseSchemaInfo, TableInfo
+
+from model_serving_utils import query_endpoint, is_endpoint_supported
+
+# ---------- Logging ----------
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# ---------- Databricks clients ----------
+w = WorkspaceClient()
+
+# ---------- Serving endpoint from env ----------
+SERVING_ENDPOINT = os.getenv("SERVING_ENDPOINT")
+assert SERVING_ENDPOINT, (
+    "Unable to determine serving endpoint to use for chatbot app.\n"
+    "Set the SERVING_ENDPOINT environment variable to the name of your serving endpoint.\n"
+    "If deploying to a Databricks app, include a serving endpoint resource named 'serving_endpoint' with CAN_QUERY."
+)
+
+endpoint_supported = is_endpoint_supported(SERVING_ENDPOINT)
+
+# ---------- Helpers to fetch UC metadata ----------
+@st.cache_data(show_spinner=False, ttl=300)
+def list_catalogs() -> List[str]:
+    cats = w.catalogs.list()
+    return sorted([c.name for c in cats])
+
+@st.cache_data(show_spinner=False, ttl=300)
+def list_schemas(catalog: str) -> List[str]:
+    if not catalog:
+        return []
+    sch = w.schemas.list(catalog_name=catalog)
+    return sorted([s.name for s in sch])
+
+def search_tables(catalog: str, schema: str, q: str, limit: int = 50) -> List[str]:
+    """
+    Server-side search for tables with prefix match on 3+ chars.
+    Avoids loading all table names.
+    """
+    if not catalog or not schema or len(q) < 3:
+        return []
+    # Use UC list with pagination and filter on prefix server-side when supported.
+    # The SDK list API doesn't have search, so we stream pages and stop when limit reached.
+    results: List[str] = []
+    page = w.tables.list(catalog_name=catalog, schema_name=schema, max_results=1000)
+    while True:
+        for t in page:
+            name = t.name
+            if name.lower().startswith(q.lower()):
+                results.append(name)
+                if len(results) >= limit:
+                    return sorted(results)
+        if not page.next_page_token:
+            break
+        page = w.tables.list(
+            catalog_name=catalog,
+            schema_name=schema,
+            max_results=1000,
+            page_token=page.next_page_token,
+        )
+    return sorted(results)
+
+def get_table_schema(catalog: str, schema: str, table: str) -> List[Dict[str, str]]:
+    tinfo: TableInfo = w.tables.get(f"{catalog}.{schema}.{table}")
+    cols = []
+    if tinfo.columns:
+        for c in tinfo.columns:
+            cols.append({"name": c.name, "type": c.type_text or c.type_name or "unknown", "nullable": str(c.nullable)})
+    return cols
+
+def get_table_sample(catalog: str, schema: str, table: str, limit: int = 100):
+    # Use SQL Warehouse endpoint exposed via workspace client
+    sql = f"SELECT * FROM `{catalog}`.`{schema}`.`{table}` LIMIT {limit}"
+    # Use `statement execution` API to get a Pandas df
+    res = w.statement_execution.execute_statement(
+        warehouse_id=os.getenv("DATABRICKS_WAREHOUSE_ID"),
+        catalog=catalog,
+        schema=schema,
+        statement=sql,
+        wait_timeout="60s",
+        on_wait_timeout="CANCEL",
+    )
+    # Convert to pandas DataFrame
+    pdf = res.as_pandas()
+    return pdf
+
+# ---------- Streamlit Session State ----------
+if "messages" not in st.session_state:
+    st.session_state.messages = []  # list[{"role": "user"|"assistant", "content": str}]
+
+if "catalog" not in st.session_state:
+    st.session_state.catalog = None
+if "schema" not in st.session_state:
+    st.session_state.schema = None
+if "table" not in st.session_state:
+    st.session_state.table = None
+if "table_query" not in st.session_state:
+    st.session_state.table_query = ""
+
+# ---------- Page config ----------
+st.set_page_config(
+    page_title="DLT Explorer & Chat",
+    page_icon="🤖",
+    layout="wide",
+    initial_sidebar_state="expanded",
+)
+
+# ---------- Endpoint compatibility banner ----------
+if not endpoint_supported:
+    st.error("Unsupported Endpoint Type")
+    st.markdown(
+        f"The endpoint `{SERVING_ENDPOINT}` is not compatible with this basic chatbot template. "
+        "Please use a chat-completions or conversational agent endpoint."
+    )
+    st.stop()
+
+# ---------- Sidebar ----------
+with st.sidebar:
+    st.title("⚙️ Configurations")
+
+    catalogs = list_catalogs()
+    st.session_state.catalog = st.selectbox(
+        "Select a Catalog",
+        catalogs,
+        index=catalogs.index(st.session_state.catalog) if st.session_state.catalog in catalogs else 0 if catalogs else None,
+        key="catalog_select",
+        placeholder="Choose a catalog",
+    )
+
+    schemas = list_schemas(st.session_state.catalog) if st.session_state.catalog else []
+    st.session_state.schema = st.selectbox(
+        "Select a Schema",
+        schemas,
+        index=schemas.index(st.session_state.schema) if st.session_state.schema in schemas else 0 if schemas else None,
+        key="schema_select",
+        placeholder="Choose a schema",
+    )
+
+    st.divider()
+
+    # Search-based table select (no preloading 1M names)
+    st.text("Table (type 3+ chars to search)")
+    st.session_state.table_query = st.text_input(
+        "Search tables", value=st.session_state.table_query, key="table_query_input", label_visibility="collapsed"
+    )
+
+    table_options: List[str] = []
+    if st.session_state.table_query and len(st.session_state.table_query) >= 3:
+        with st.spinner("Searching tables..."):
+            table_options = search_tables(
+                st.session_state.catalog, st.session_state.schema, st.session_state.table_query, limit=50
+            )
+    st.session_state.table = st.selectbox(
+        "Select a Table",
+        table_options,
+        key="table_select",
+        placeholder="Start typing table name...",
+        index=table_options.index(st.session_state.table) if st.session_state.table in table_options else 0
+        if table_options
+        else None,
+    )
+
+# ---------- Main content ----------
+left, right = st.columns([1.2, 1.8], gap="large")
+
+with left:
+    st.title("📚 Table Context")
+    cat, sch, tbl = st.session_state.catalog, st.session_state.schema, st.session_state.table
+    if cat and sch and tbl:
+        st.caption(f"Selected: `{cat}`.`{sch}`.`{tbl}`")
+        try:
+            schema_rows = get_table_schema(cat, sch, tbl)
+            if schema_rows:
+                st.subheader("Schema")
+                st.dataframe(schema_rows, use_container_width=True, hide_index=True)
+        except Exception as e:
+            st.warning(f"Could not fetch schema: {e}")
+
+        try:
+            sample_df = get_table_sample(cat, sch, tbl, limit=100)
+            if sample_df is not None:
+                st.subheader("Sample Rows (top 100)")
+                st.dataframe(sample_df, use_container_width=True)
+        except Exception as e:
+            st.warning(f"Could not fetch sample rows: {e}")
+    else:
+        st.info("Select Catalog, Schema and then search/select a Table to see schema and sample rows.")
+
+with right:
+    st.title("💬 Chat")
+
+    # Replay history
+    for msg in st.session_state.messages:
+        with st.chat_message(msg["role"]):
+            st.markdown(msg["content"])
+
+    # Compose prompt with context
+    user_prompt = st.chat_input("Ask a question about the selected table, or request an analysis...")
+    if user_prompt:
+        # Validate selection
+        if not (st.session_state.catalog and st.session_state.schema and st.session_state.table):
+            st.warning("Please select a catalog, schema and table first.")
+        else:
+            fqtn = f"`{st.session_state.catalog}`.`{st.session_state.schema}`.`{st.session_state.table}`"
+
+            # Add user message to history
+            st.session_state.messages.append({"role": "user", "content": user_prompt})
+            with st.chat_message("user"):
+                st.markdown(user_prompt)
+
+            # Build system/context message to send to model
+            context_chunks = [
+                f"User has selected the table {fqtn}.",
+                "Task: Answer the user's question using the table context. If needed, ask clarifying questions.",
+                "When referencing the table, use the fully qualified name shown.",
+            ]
+            system_ctx = "\n".join(context_chunks)
+
+            # Prepare the message list for the endpoint (system + history + latest user)
+            messages_for_model: List[Dict[str, str]] = [{"role": "system", "content": system_ctx}]
+            messages_for_model.extend(st.session_state.messages)
+
+            # Query model
+            with st.chat_message("assistant"):
+                with st.spinner("Thinking..."):
+                    try:
+                        assistant_response = query_endpoint(
+                            endpoint_name=SERVING_ENDPOINT,
+                            messages=messages_for_model,
+                            max_tokens=400,
+                        )["content"]
+                    except Exception as e:
+                        assistant_response = f"Error calling endpoint `{SERVING_ENDPOINT}`: {e}"
+                st.markdown(assistant_response)
+
+            # Persist assistant reply
+            st.session_state.messages.append({"role": "assistant", "content": assistant_response})
