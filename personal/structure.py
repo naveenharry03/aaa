@@ -1,3 +1,28 @@
+from databricks.labs.dqx.config import LLMModelConfig
+from databricks.labs.dqx.profiler.generator import DQGenerator
+from databricks.sdk import WorkspaceClient
+
+# Configure LLM model
+llm_config = LLMModelConfig(
+    model_name="databricks/databricks-claude-sonnet-4-5",
+    # api_key and api_base are optional for foundation models
+)
+
+# Initialize the generator
+ws = WorkspaceClient()
+generator = DQGenerator(workspace_client=ws, llm_model_config=llm_config,custom_check_functions=None)
+
+# Generate rules from natural language description
+user_input = """
+name should not start with 'system'.
+All names must have a valid versions attached.
+All latest versions must have a user identifier attached.
+"""
+
+checks = generator.generate_dq_rules_ai_assisted(user_input=user_input,table_name='example.quality_data.experiments')
+
+print(checks)
+
 project_root/
 │
 ├── agents/
