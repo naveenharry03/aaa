@@ -45,6 +45,55 @@ print(f"Combined {len(profiler_checks)} profiler rules with {len(ai_checks)} AI 
 print(f"Total: {len(all_checks)} quality checks")
 
 
+def update_delta_table_of_dq_rules(config_df):
+    """
+    Updates a Delta table with new configurations from a DataFrame.
+
+    This function checks if a Delta table exists. If it does, it merges the new configurations
+    from the provided DataFrame into the existing Delta table. If the table does not exist, it
+    creates a new Delta table with the provided configurations.
+
+    Args:
+        config_df (DataFrame): A Spark DataFrame containing the new configurations to be merged
+                               into the Delta table.
+
+    Returns:
+        None
+    """
+    table_name = "default.dqx_quality_checks_configs"
+
+    try:
+        delta_table = spark.table(table_name)
+        #display(delta_table)
+    except AnalysisException:
+        # If the table does not exist or is not a Delta table, create it as a Delta table
+        config_df.write.format("delta").mode("overwrite").saveAsTable(table_name)
+        delta_table = spark.table(table_name)
+
+    delta_table = DeltaTable.forName(spark, table_name)
+
+    delta_table.alias("target").merge(
+        config_df.alias("source"),
+        "target.table_name = source.table_name"  # Replace with your actual join condition
+    ).whenMatchedUpdateAll().whenNotMatchedInsertAll().execute()
+    display(spark.table(table_name))
+
+
+spark.sql("USE CATALOG example")
+sample_size = 100000
+config_df = generate_dqx_rules_parallel("quality_data", sample_size)
+
+update_delta_table_of_dq_rules(config_df)
+
+```````````````````````````
+
+
+
+
+
+
+
+
 import os
 from databricks.connect import DatabricksSession
 
