@@ -1,3 +1,50 @@
+from databricks.labs.dqx.profiler.profiler import DQProfiler
+from databricks.labs.dqx.profiler.generator import DQGenerator
+from databricks.labs.dqx.engine import DQEngine,FileChecksStorageConfig
+from databricks.sdk import WorkspaceClient
+
+ws = WorkspaceClient()
+
+# Step 1: Profile the data to generate statistics-based (technical) rules
+profiler = DQProfiler(ws)
+input_df = spark.read.table("example.quality_data.experiments")
+summary_stats, profiles = profiler.profile(input_df)
+
+generator = DQGenerator(ws)
+
+# Generate profiler-based rules
+profiler_checks = generator.generate_dq_rules(profiles)
+
+# Step 2: Generate business logic rules using AI
+business_requirements = """
+
+-Name should not start with 'system'.
+-All names must have a valid versions attached.
+-All latest versions must have a user identifier attached.
+
+"""
+
+ai_checks = generator.generate_dq_rules_ai_assisted(
+    user_input=business_requirements,
+    table_name="example.quality_data.experiments"
+)
+
+# Step 3: Combine both sets of rules
+all_checks = profiler_checks + ai_checks
+
+# Step 4: Save combined checks
+dq_engine = DQEngine(ws)
+dq_engine.save_checks(
+  checks=all_checks,
+  config=FileChecksStorageConfig(
+    location="/dbfs/tmp/quality_checks.json"
+  )
+)
+
+print(f"Combined {len(profiler_checks)} profiler rules with {len(ai_checks)} AI rules")
+print(f"Total: {len(all_checks)} quality checks")
+
+
 import os
 from databricks.connect import DatabricksSession
 
