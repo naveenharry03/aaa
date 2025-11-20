@@ -1,3 +1,18 @@
+import os
+from databricks.connect import DatabricksSession
+
+print("HOST:", os.getenv("DATABRICKS_HOST"))
+print("CLUSTER:", os.getenv("DATABRICKS_CLUSTER_ID"))
+print("WAREHOUSE:", os.getenv("DATABRICKS_SERVERLESS_SQL_WAREHOUSE_ID"))
+
+spark = DatabricksSession.builder.getOrCreate()
+print("Spark version:", spark.version)
+
+df = spark.range(5)
+df.show()
+
+
+
 from databricks.labs.dqx.config import LLMModelConfig
 from databricks.labs.dqx.profiler.generator import DQGenerator
 from databricks.sdk import WorkspaceClient
