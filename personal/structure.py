@@ -1,3 +1,169 @@
+%pip install -U -qqqq langgraph uv databricks-agents databricks-langchain mlflow-skinny[databricks]
+
+
+from typing import Annotated, Any, Generator, Optional, Sequence, TypedDict, Union
+import mlflow
+from databricks_langchain import (
+    ChatDatabricks
+    
+    
+)
+from langchain.messages import AIMessage, AIMessageChunk, AnyMessage
+from langchain_core.runnables import RunnableConfig, RunnableLambda
+from langchain_core.tools import BaseTool
+from langgraph.graph import END, StateGraph
+from langgraph.graph.message import add_messages
+from langgraph.prebuilt.tool_node import ToolNode
+from mlflow.pyfunc import ResponsesAgent
+from mlflow.types.responses import (
+    ResponsesAgentRequest,
+    ResponsesAgentResponse,
+    ResponsesAgentStreamEvent,
+    output_to_responses_items_stream,
+    to_chat_completions_input,
+)
+
+
+
+from databricks_langchain import ChatDatabricks
+
+
+from pyspark.sql.types import *
+import dbldatagen as dg
+
+chat_model = ChatDatabricks(
+    endpoint="databricks-claude-3-7-sonnet",
+    temperature=0.1,
+    max_tokens=250,
+    
+)
+
+
+spark.conf.set("spark.sql.execution.arrow.pyspark.enabled", "true")
+
+
+def syn_gen(table_name, rows: Optional[int] = None) -> str:
+    """
+    This tool processes the inputs and returns a result.
+    """
+    try:
+            source_df = spark.table(table_name)
+            schema = source_df.schema
+
+            row_count = rows
+
+            # Handle duplicate column names by deduplicating
+            seen_columns = set()
+            unique_fields = []
+            
+            for field in schema.fields:
+                if field.name not in seen_columns:
+                    unique_fields.append(field)
+                    seen_columns.add(field.name)
+                else:
+                    print(f"Warning: Skipping duplicate column '{field.name}'")
+
+            # Start with basic DataGenerator
+            dataspec = dg.DataGenerator(spark, rows=row_count, partitions=4)
+
+            # Add columns based on their types
+            for field in unique_fields:
+                col_name = field.name
+                dt = field.dataType
+                
+                if isinstance(dt, StringType):
+                    dataspec = dataspec.withColumn(col_name, "string", template=r"\w{10}")
+                elif isinstance(dt, IntegerType):
+                    dataspec = dataspec.withColumn(col_name, "int", minValue=1, maxValue=1000)
+                elif isinstance(dt, LongType):
+                    dataspec = dataspec.withColumn(col_name, "long", minValue=1, maxValue=10000)
+                elif isinstance(dt, DoubleType):
+                    dataspec = dataspec.withColumn(col_name, "double", minValue=0.0, maxValue=100.0)
+                elif isinstance(dt, DecimalType):
+                    dataspec = dataspec.withColumn(col_name, "decimal", minValue=0.0, maxValue=1000.0)
+                elif isinstance(dt, BooleanType):
+                    dataspec = dataspec.withColumn(col_name, "boolean")
+                elif isinstance(dt, DateType):
+                    dataspec = dataspec.withColumn(col_name, "date", begin="2020-01-01", end="2024-12-31")
+                elif isinstance(dt, TimestampType):
+                    dataspec = dataspec.withColumn(col_name, "timestamp", begin="2020-01-01 00:00:00", end="2024-12-31 23:59:59")
+                else:
+                    # Default to string for unknown types
+                    dataspec = dataspec.withColumn(col_name, "string", template=r"\w{10}")
+
+            synthetic_df = dataspec.build()
+            
+            # Drop any remaining duplicate columns before saving
+            distinct_cols = []
+            seen = set()
+            for col in synthetic_df.columns:
+                if col not in seen:
+                    distinct_cols.append(col)
+                    seen.add(col)
+            
+            synthetic_df = synthetic_df.select(distinct_cols)
+            synthetic_df.createOrReplaceTempView("synthetic_data_temp")
+            return f"Successfully generated {row_count} rows of synthetic data with {len(distinct_cols)} unique columns"
+    except Exception as e:
+            return f"Error generating synthetic data: {str(e)}"
+
+
+
+
+
+tools = [syn_gen]
+llm_with_tools = chat_model.bind_tools(tools)
+
+from langgraph.graph import MessagesState
+from langchain_core.messages import HumanMessage, SystemMessage
+
+# System message
+sys_msg = SystemMessage(content="You are a helpful assistant tasked with generating data for a table in a SQL database. The table name is provided as the first input. The second input is the number of rows to generate.")
+
+# Node
+def assistant(state: MessagesState):
+   return {"messages": [llm_with_tools.invoke([sys_msg] + state["messages"])]}
+
+
+
+from langgraph.graph import START, StateGraph
+from langgraph.prebuilt import tools_condition
+from langgraph.prebuilt import ToolNode
+from IPython.display import Image, display
+
+# Graph
+builder = StateGraph(MessagesState)
+
+# Define nodes: these do the work
+builder.add_node("assistant", assistant)
+builder.add_node("tools", ToolNode(tools))
+
+# Define edges: these determine how the control flow moves
+builder.add_edge(START, "assistant")
+builder.add_conditional_edges(
+    "assistant",
+    # If the latest message (result) from assistant is a tool call -> tools_condition routes to tools
+    # If the latest message (result) from assistant is a not a tool call -> tools_condition routes to END
+    tools_condition,
+)
+builder.add_edge("tools", "assistant")
+react_graph = builder.compile()
+
+# Show
+display(Image(react_graph.get_graph(xray=True).draw_mermaid_png()))
+
+messages = [HumanMessage(content="Generate synthetic data for table example.quality_data.experiments with 100 rows")]
+messages = react_graph.invoke({"messages": messages})
+
+messages = [HumanMessage(content="What is synthetic data?")]
+messages = react_graph.invoke({"messages": messages})
+
+for m in messages['messages']:
+    m.pretty_print()
+
+
+````````````````````````````````````````````````````````````````````````````````````````````````````````
+
 from databricks.labs.dqx.profiler.profiler import DQProfiler
 from databricks.labs.dqx.profiler.generator import DQGenerator
 from databricks.labs.dqx.engine import DQEngine,FileChecksStorageConfig
