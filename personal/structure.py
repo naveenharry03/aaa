@@ -1531,3 +1531,84 @@ INSTRUCTIONS TO EXECUTE:
 - Generate the baseline table now following the OUTPUT CONTRACT exactly.
 - Remember: Output CSV only, no explanations, no markdown, no code fences.
 """
+
+
+
+``````````````````````````````````````````````````````````````````````````````````````````````````````````````````````````````````````
+
+trigger: none
+pool:
+    name : ISE_DataScience
+parameters:
+    - name: env
+      type: string
+      default: dev
+      values:
+        - dev
+        - stg
+        - prd
+
+    - name: catalog
+      type: string
+      default: "udm_tests"
+ 
+stages:
+
+- stage: onRelease
+
+  variables:
+
+    - group: ai-eng-kv-${{parameters.env}} 
+  jobs:
+
+    - job: ${{parameters.env}}ReleaseJob
+
+      steps:
+
+        - checkout: self
+          displayName: 'Checkout Branch: $(Build.SourceBranchName)'
+
+        - script: |
+            echo Install Databricks CLI on Linux
+            curl -fsSL https://raw.githubusercontent.com/databricks/setup-cli/main/install.sh | sh
+          displayName: 'Install Databricks CLI on Linux'
+          condition: eq(variables['Agent.OS'], 'Linux')
+
+        - script: |
+            echo Install Databrciks CLI on Windows
+            choco install databricks-cli
+          displayName: 'Install Databricks CLI on Windows'
+          condition: eq(variables['Agent.OS'], 'Windows_NT')
+          
+        - task: CopyFiles@2
+          inputs:
+            SourceFolder: '$(Build.Repository.LocalPath)'
+            Contents: '**'
+            TargetFolder: '$(Build.BinariesDirectory)'
+            CleanTargetFolder: true
+            OverWrite: true
+          name: 'copy_source_code'
+
+        - powershell: |  
+            Write-Host "##vso[task.setvariable variable=DATABRICKS_BUNDLE_ROOT]$(Build.BinariesDirectory)\Snowflake\snowflake_daily_ingestion\" 
+          displayName: "Set databricks root directory variable"  
+        
+        - script: echo %DATABRICKS_BUNDLE_ROOT%
+          displayName: Echo DatabricksBundle path
+        - powershell: |
+            databricks --version
+            echo "databricks is avaialble"         
+          name: CheckDatabricks
+
+        - powershell: |
+            Write-Host "HOST is $env:DATABRICKS_HOST" 
+            Write-Host "CLIENT_ID is $env:DATABRICKS_CLIENT_ID"
+            Write-Host "CLIENT_SECRET is $env:DATABRICKS_CLIENT_SECRET"
+            databricks bundle validate -t ${{parameters.env}}
+            echo "validation succeded"
+            databricks bundle deploy -t ${{parameters.env}}
+          env:
+            DATABRICKS_HOST: $(DATABRICKS_HOST)
+            DATABRICKS_CLIENT_ID: $(CLIENT_ID)
+            DATABRICKS_CLIENT_SECRET: $(CLIENT_SECRET)
+          name: Databricks_ENV_setup
