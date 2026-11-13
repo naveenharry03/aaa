@@ -42,3 +42,6 @@ with open(output_txt, "w", encoding="utf-8") as f:
         )
 
 print(f"\n Transcription complete! Saved to:\n{output_txt}")
+
+
+"Here is a transcript of a 2-person meeting between Evan (the ad-tech specialist explaining TTD) and Naveen (the data scientist asking questions). Go through the timestamps and label each line as either [Evan]: or [Naveen]: based on the context of who is explaining versus who is asking questions."
