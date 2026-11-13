@@ -47,10 +47,9 @@ print(f"\n Transcription complete! Saved to:\n{output_txt}")
 "Here is a transcript of a 2-person meeting between Evan (the ad-tech specialist explaining TTD) and Naveen (the data scientist asking questions). Go through the timestamps and label each line as either [Evan]: or [Naveen]: based on the context of who is explaining versus who is asking questions."
 
 
-
 import os
-import webbrowser
 from pathlib import Path
+import webbrowser
 
 html_content = """<!DOCTYPE html>
 <html lang="en">
@@ -226,15 +225,54 @@ html_content = """<!DOCTYPE html>
 
         p, li {
             font-size: 14.5px;
-            line-height: 1.7;
+            line-height: 1.75;
             color: #334155;
+            text-align: justify;
+            text-justify: inter-word;
         }
 
         p {
             margin-bottom: 14px;
         }
 
-        /* --- ARCHITECTURE FLOW DIAGRAM (CONSOLE STYLE) --- */
+        /* --- Q&A STYLING --- */
+        .qa-card {
+            background: #ffffff;
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            padding: 22px 24px;
+            margin: 18px 0;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.03);
+        }
+
+        .qa-question {
+            font-size: 15.5px;
+            font-weight: 700;
+            color: #1e293b;
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            margin-bottom: 12px;
+        }
+
+        .qa-badge {
+            background: #eff6ff;
+            color: #2563eb;
+            font-size: 12px;
+            font-weight: 800;
+            padding: 2px 8px;
+            border-radius: 4px;
+            border: 1px solid #bfdbfe;
+            flex-shrink: 0;
+            margin-top: 1px;
+        }
+
+        .qa-answer {
+            color: #334155;
+            line-height: 1.75;
+        }
+
+        /* --- ARCHITECTURE FLOW DIAGRAM --- */
         .diagram-container {
             background: #090d16;
             border: 1px solid #1e293b;
@@ -267,7 +305,6 @@ html_content = """<!DOCTYPE html>
         .diagram-code .highlight-ds { color: #38bdf8; font-weight: 600; }
         .diagram-code .highlight-db { color: #a78bfa; font-weight: 600; }
         .diagram-code .highlight-ttd { color: #34d399; font-weight: 600; }
-        .diagram-code .highlight-arrow { color: #f59e0b; }
 
         /* --- SIDE-BY-SIDE GRID --- */
         .side-by-side-grid {
@@ -281,7 +318,7 @@ html_content = """<!DOCTYPE html>
             background: var(--bg-card);
             border: 1px solid var(--border-color);
             border-radius: 12px;
-            padding: 22px;
+            padding: 24px;
             box-shadow: 0 1px 3px rgba(0,0,0,0.04);
         }
 
@@ -308,19 +345,16 @@ html_content = """<!DOCTYPE html>
             border: 1px solid var(--border-color);
             border-left: 4px solid #6366f1;
             border-radius: 8px;
-            padding: 18px 22px;
+            padding: 20px 24px;
             margin: 16px 0;
             box-shadow: 0 1px 3px rgba(0,0,0,0.03);
         }
 
         .formula-title {
-            font-size: 14px;
+            font-size: 14.5px;
             font-weight: 700;
             color: #1e293b;
             margin-bottom: 8px;
-            display: flex;
-            align-items: center;
-            gap: 8px;
         }
 
         .math-display {
@@ -330,7 +364,7 @@ html_content = """<!DOCTYPE html>
             border-radius: 6px;
             font-family: 'Fira Code', monospace;
             font-size: 13.5px;
-            margin: 8px 0;
+            margin: 10px 0;
             display: block;
         }
 
@@ -338,65 +372,34 @@ html_content = """<!DOCTYPE html>
         .math-display .op { color: #f43f5e; }
 
         /* --- STEP BOXES & CALLOUTS --- */
-        .step-box {
-            background: #ffffff;
-            border: 1px solid var(--border-color);
-            border-radius: 10px;
-            padding: 22px;
-            margin: 18px 0;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.03);
-        }
-
-        .step-box-header {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            border-bottom: 1px solid #f1f5f9;
-            padding-bottom: 10px;
-            margin-bottom: 14px;
-        }
-
-        .step-box-title {
-            font-size: 15px;
-            font-weight: 700;
-            color: #0f172a;
-        }
-
-        .step-box-tag {
-            font-size: 12px;
-            background: #f1f5f9;
-            color: #475569;
-            padding: 2px 8px;
-            border-radius: 4px;
-            font-weight: 500;
-        }
-
         .calculation-block {
             background: #f8fafc;
             border: 1px dashed var(--border-color);
             border-radius: 6px;
             padding: 12px 16px;
-            margin: 10px 0;
+            margin: 12px 0;
             font-family: 'Fira Code', monospace;
             font-size: 13px;
             line-height: 1.7;
             color: #1e293b;
         }
 
-        /* --- TABLES --- */
+        /* --- CENTER-ALIGNED TABLES --- */
         .table-responsive {
-            overflow-x: auto;
-            margin: 16px 0 24px;
+            display: flex;
+            justify-content: center;
+            margin: 20px auto 28px;
             border-radius: 8px;
             border: 1px solid var(--border-color);
             background: #ffffff;
+            overflow-x: auto;
         }
 
         table {
             width: 100%;
             border-collapse: collapse;
             font-size: 13.5px;
-            text-align: left;
+            text-align: center;
         }
 
         th {
@@ -405,12 +408,14 @@ html_content = """<!DOCTYPE html>
             font-weight: 600;
             padding: 12px 16px;
             border-bottom: 1px solid var(--border-color);
+            text-align: center;
         }
 
         td {
             padding: 12px 16px;
             border-bottom: 1px solid #f1f5f9;
             color: #334155;
+            text-align: center;
         }
 
         tr:last-child td { border-bottom: none; }
@@ -434,16 +439,6 @@ html_content = """<!DOCTYPE html>
             font-size: 11.5px;
             display: inline-block;
         }
-
-        .quote-box {
-            border-left: 3px solid #94a3b8;
-            padding: 8px 16px;
-            background: #f8fafc;
-            font-style: italic;
-            color: #475569;
-            margin: 8px 0;
-            font-size: 13.5px;
-        }
     </style>
 </head>
 <body>
@@ -452,12 +447,12 @@ html_content = """<!DOCTYPE html>
     <aside class="sidebar">
         <div class="sidebar-header">
             <h2>Media & AdTech Wiki</h2>
-            <span>Knowledge Base & Technical Specs</span>
+            <span>Architecture & System Specifications</span>
         </div>
         <ul class="nav-list">
             <li class="nav-section-title">Walkthrough Sections</li>
-            <li class="nav-item active"><a href="#problem">1. The Business Problem</a></li>
-            <li class="nav-item"><a href="#model-output">2. Model Output (Input Layer)</a></li>
+            <li class="nav-item active"><a href="#problem">1. The Business Problem (Q&A)</a></li>
+            <li class="nav-item"><a href="#model-output">2. Model Guidance Layer</a></li>
             <li class="nav-item"><a href="#architecture">3. System Flowchart</a></li>
             <li class="nav-item"><a href="#side-by-side">4. Theory vs Reality</a></li>
             <li class="nav-item"><a href="#phase0">5. Phase 0: Setup & S3</a></li>
@@ -480,47 +475,78 @@ html_content = """<!DOCTYPE html>
             <span class="doc-badge">AdTech & Data Science Deep-Dive</span>
             <h1>How TTD Automation Optimizes DMA Spend with Model Guidance</h1>
             <div class="doc-meta">
-                <strong>Meeting Recording:</strong> TTD Automation Approach Walkthrough &nbsp;|&nbsp; 
-                <strong>Participants:</strong> Evan (Ad-Tech Trading) & Naveen (Data Science)
+                <strong>Document Context:</strong> DMA Spend Pacing Architecture Specification &nbsp;|&nbsp; 
+                <strong>Prepared by:</strong> Naveen &nbsp;|&nbsp; 
+                <strong>Technical Collaboration:</strong> Evan (Ad-Tech Operations) &nbsp;|&nbsp; 
+                <strong>Team:</strong> Data Science & Media Analytics
             </div>
 
-            <!-- SECTION 1 -->
+            <!-- SECTION 1: PROBLEM AS Q&A -->
             <section id="problem">
-                <h2>1. The Problem: Why Automation is Needed</h2>
-                <p>
-                    Our Data Science team builds a <strong>Propensity Model</strong> that calculates which regions (DMAs) across the US have consumers most likely to convert, telling media buyers exactly what percentage of the budget should go to each city.
-                </p>
-                <p>
-                    <strong>The Dilemma in The Trade Desk (TTD):</strong><br>
-                    You might ask: <em>"Why can't the media team just set individual dollar budget caps for all 210 DMAs directly in TTD?"</em>
-                </p>
-                <div class="step-box">
-                    <p>Evan explained why this is impossible in practice:</p>
-                    <ul style="padding-left: 20px; line-height: 1.8;">
-                        <li><strong>Campaign Architecture:</strong> Campaigns are designed by the media agency at a broad brand or national level.</li>
-                        <li><strong>Massive Overhead:</strong> Manually fragmenting every campaign into 210 distinct line-item budgets creates thousands of micro-budgets, making it an unmanageable operational nightmare.</li>
-                        <li><strong>Damages Liquidity:</strong> Hard budget caps trap money. If a DMA runs out of ad impressions, the locked budget cannot be spent elsewhere, leaving client marketing dollars unspent.</li>
-                    </ul>
+                <h2>1. The Business Problem: Operationalizing Model Guidance</h2>
+
+                <div class="qa-card">
+                    <div class="qa-question">
+                        <span class="qa-badge">Q1</span>
+                        <span>What strategic value does our Data Science team's model provide?</span>
+                    </div>
+                    <div class="qa-answer">
+                        <p>Our Data Science team builds a <strong>Propensity Model</strong> that calculates regional purchase propensities across all 210 Designated Market Areas (DMAs) in the United States. This statistical output defines the exact percentage of the total marketing budget that should be allocated to each city to maximize conversion volume.</p>
+                    </div>
+                </div>
+
+                <div class="qa-card">
+                    <div class="qa-question">
+                        <span class="qa-badge">Q2</span>
+                        <span>Why can't the media team simply set hard dollar budget caps for each of the 210 DMAs directly in The Trade Desk (TTD)?</span>
+                    </div>
+                    <div class="qa-answer">
+                        <p>While that seems straightforward, Evan details two critical technical roadblocks that make hard budgeting impossible in live execution:</p>
+                        <ul style="padding-left: 20px; line-height: 1.8;">
+                            <li><strong>Severe Campaign Fragmentation:</strong> Agency media teams configure campaigns at high brand-level structures. Breaking these into 210 isolated line-item budgets across multiple ad groups creates thousands of micro-budgets, introducing massive administrative overhead.</li>
+                            <li><strong>Destruction of Bidding Liquidity:</strong> Hard budgetary walls severely constrain DSP algorithms. If a small DMA lacks ad inventory on a given day, hard budget caps lock those marketing dollars, preventing other high-performing regions from utilizing them and leaving total brand budgets unspent.</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="qa-card">
+                    <div class="qa-question">
+                        <span class="qa-badge">Q3</span>
+                        <span>How does the automation resolve this dilemma?</span>
+                    </div>
+                    <div class="qa-answer">
+                        <p>Instead of hard budget caps, Evan's team built an automated <strong>"Proxy Budgeting" pacing engine in Databricks</strong>. It leaves the campaign budget unified at the national level, but dynamically steers DMA-level spend toward our model's targets using automated <strong>Bid Factor Multipliers</strong> pushed via API.</p>
+                    </div>
                 </div>
             </section>
 
-            <!-- SECTION 2 -->
+            <!-- SECTION 2: INPUT LAYER AS Q&A -->
             <section id="model-output">
-                <h2>2. What the Model Output Gives (The Input Layer)</h2>
-                <p>
-                    To guide spend without creating hard-budget walls, our Data Science team provides strategic spend guidance delivered 1–2 days before the start of each month:
-                </p>
-                <ul style="padding-left: 20px; line-height: 1.8;">
-                    <li><strong>Delivery Channel:</strong> Automated CSV drop into an <strong>AWS S3 bucket</strong>.</li>
-                    <li><strong>File Schema:</strong> Contains <code>DMA ID</code>, <code>DMA Name</code>, and <code>Propensity Score</code>.</li>
-                    <li><strong>Functional Meaning:</strong> The Propensity Score is the <strong>Target Percentage (%) of the Total Monthly Campaign Budget</strong> that should be spent in that specific market.</li>
-                </ul>
+                <h2>2. Model Guidance Layer (The Ingestion Input)</h2>
+
+                <div class="qa-card">
+                    <div class="qa-question">
+                        <span class="qa-badge">Q4</span>
+                        <span>What is the handoff process between our Data Science team and the Ad-Tech platform?</span>
+                    </div>
+                    <div class="qa-answer">
+                        <p>Our Data Science team provides monthly spend guidance without demanding hard line-item partitions through a standardized data ingestion protocol:</p>
+                        <ul style="padding-left: 20px; line-height: 1.8;">
+                            <li><strong>Delivery Cadence:</strong> Automated delivery 1–2 days prior to the first calendar day of each month.</li>
+                            <li><strong>Transmission Channel:</strong> Secure automated drop to an <strong>AWS S3 bucket</strong>.</li>
+                            <li><strong>Schema Ingestion:</strong> Ingests <code>DMA ID</code>, <code>DMA Region</code>, and <code>Propensity Score</code>.</li>
+                            <li><strong>Operational Translation:</strong> The Propensity Score represents the <strong>Target Proportion (%) of the Total Monthly Campaign Budget</strong> intended for that designated geography.</li>
+                        </ul>
+                    </div>
+                </div>
             </section>
 
             <!-- SECTION 3: SYSTEM ARCHITECTURE FLOWCHART -->
             <section id="architecture">
                 <h2>3. System Architecture & Information Flow</h2>
-                <p>Here is the exact end-to-end data pipeline connecting our model to live programmatic ad bidding:</p>
+                <p>
+                    To connect our model's targets with live programmatic bidding, Evan's team created an automated pacing engine in <strong>Databricks</strong> that interfaces directly with the <strong>TTD API</strong>:
+                </p>
                 
                 <div class="diagram-container">
                     <div class="diagram-header">
@@ -550,33 +576,44 @@ html_content = """<!DOCTYPE html>
                 </div>
             </section>
 
-            <!-- SECTION 4: SIDE-BY-SIDE THEORY VS REALITY -->
+            <!-- SECTION 4: SIDE-BY-SIDE THEORY VS REALITY AS Q&A -->
             <section id="side-by-side">
-                <h2>4. Side-by-Side: Theoretical Concept vs Real-Time Execution</h2>
+                <h2>4. Side-by-Side: Intuitive Analogy vs Programmatic Reality</h2>
+
+                <div class="qa-card" style="margin-bottom: 20px;">
+                    <div class="qa-question">
+                        <span class="qa-badge">Q5</span>
+                        <span>How can non-technical stakeholders visualize this mechanism without getting lost in ad-tech jargon?</span>
+                    </div>
+                    <div class="qa-answer">
+                        <p>Compare the pacing mechanism to an intuitive <strong>Vehicle Cruise Control system</strong> versus its exact <strong>Programmatic Reality in TTD</strong>:</p>
+                    </div>
+                </div>
+
                 <div class="side-by-side-grid">
-                    <!-- LEFT: THEORY -->
+                    <!-- LEFT: INTUITIVE ANALOGY -->
                     <div class="card theory">
-                        <span class="card-badge">Theoretical Concept</span>
-                        <h3>Cruise Control & Proxy Budgeting</h3>
-                        <p><strong>The Strategy:</strong> Instead of building fixed walls, treat spend like a car on cruise control aiming for a target speed.</p>
+                        <span class="card-badge">Intuitive Analogy</span>
+                        <h3>Vehicle Cruise Control</h3>
+                        <p><strong>The Concept:</strong> Instead of building rigid roadblocks, treat regional spend like maintaining an exact cruising speed across different terrains.</p>
                         <ul style="padding-left: 20px; line-height: 1.8;">
-                            <li><strong>The Target:</strong> Our model tells the car what speed (target spend proportion) each region should maintain.</li>
-                            <li><strong>The Gas Pedal:</strong> If a DMA is spending too slowly, the system steps on the gas to speed up spend.</li>
-                            <li><strong>The Brakes:</strong> If a DMA is spending too fast, the system taps the brakes, allowing others to catch up.</li>
-                            <li><strong>CPM Stability:</strong> Volume and price are tuned together, keeping overall campaign CPM flat or slightly decreasing.</li>
+                            <li><strong>Target Speed (Set Point):</strong> Our model defines the exact target speed (target spend percentage) each region should travel at to hit the monthly goal.</li>
+                            <li><strong>Pressing the Gas:</strong> If a city travels up a hill and falls behind schedule, the cruise control automatically steps on the gas to catch up.</li>
+                            <li><strong>Tapping the Brakes:</strong> If a city travels down a hill and accelerates too fast, the cruise control eases off the pedal to cool down speed.</li>
+                            <li><strong>Fuel Efficiency (CPM Stability):</strong> By accelerating and decelerating smoothly rather than abruptly, overall fuel efficiency (average campaign CPM) remains stable or improves.</li>
                         </ul>
                     </div>
 
                     <!-- RIGHT: REALITY -->
                     <div class="card realtime">
-                        <span class="card-badge">Real-Time Execution</span>
-                        <h3>API Bid Factors & In-Auction Bidding</h3>
-                        <p><strong>The Mechanism:</strong> TTD executes this using a <strong>Bid Factor Multiplier</strong> applied to base bids.</p>
+                        <span class="card-badge">Programmatic Reality</span>
+                        <h3>TTD Bid Factors & Live Auctions</h3>
+                        <p><strong>The Execution:</strong> The Trade Desk translates cruise control using an automated <strong>Bid Factor Multiplier</strong> applied to base bids.</p>
                         <ul style="padding-left: 20px; line-height: 1.8;">
-                            <li><strong>Baseline (1.0x):</strong> Bids standard price (e.g., $5.00 CPM).</li>
-                            <li><strong>Under-pacing (1.33x):</strong> Bids $6.65 CPM. Higher bids win more programmatic auctions, quickly capturing ad space and spending money faster.</li>
-                            <li><strong>Over-pacing (0.67x):</strong> Bids $3.35 CPM. Lower bids concede competitive auctions, slowing down spend.</li>
-                            <li><strong>Safety Cap (5.0x):</strong> Multipliers are strictly capped at 5x to prevent paying irrational prices.</li>
+                            <li><strong>Baseline Multiplier (1.0x):</strong> Submits standard bids against prevailing inventory (e.g., $5.00 baseline CPM).</li>
+                            <li><strong>Under-pacing Acceleration (1.33x):</strong> Bids $6.65 CPM. Elevated bids win more programmatic auctions, quickly capturing ad space and speeding up spend.</li>
+                            <li><strong>Over-pacing Deceleration (0.67x):</strong> Bids $3.35 CPM. Lower bids concede competitive auctions, cooling down spend.</li>
+                            <li><strong>Safety Threshold (5.0x Cap):</strong> Imposes an absolute multiplier ceiling to prevent paying irrational prices in constrained markets.</li>
                         </ul>
                     </div>
                 </div>
@@ -586,47 +623,54 @@ html_content = """<!DOCTYPE html>
             <section id="phase0">
                 <h2>5. Phase 0: The Setup (Oct 28 – Oct 31)</h2>
                 
-                <h3>Your Team Drops the File into AWS S3</h3>
-                <p>On Oct 28, our automated data science pipeline drops <code>november_propensity_scores.csv</code> into S3 with the target allocations for an assumed <strong>$1,000,000 national campaign budget</strong>:</p>
+                <div class="qa-card">
+                    <div class="qa-question">
+                        <span class="qa-badge">Q6</span>
+                        <span>How are budget targets converted from propensity scores before the month begins?</span>
+                    </div>
+                    <div class="qa-answer">
+                        <p>On October 28, our data science pipeline drops <code>november_propensity_scores.csv</code> into S3. If the total national campaign budget is <strong>$1,000,000</strong>, the dollar targets are computed as follows:</p>
+                    </div>
+                </div>
 
                 <div class="table-responsive">
                     <table>
                         <thead>
                             <tr>
                                 <th>DMA ID</th>
-                                <th>City / Region</th>
-                                <th>Propensity Score (Budget Share %)</th>
-                                <th>Target Spend Calculation ($1,000,000 × Score)</th>
+                                <th>Designated Market Area</th>
+                                <th>Propensity Score (Target Share %)</th>
+                                <th>Target Budget Allocation ($1,000,000 × Score)</th>
                             </tr>
                         </thead>
                         <tbody>
                             <tr>
                                 <td><strong>DMA 501</strong></td>
                                 <td>New York</td>
-                                <td><strong>10.0%</strong></td>
-                                <td><strong>$100,000</strong></td>
+                                <td>10.0%</td>
+                                <td>$100,000</td>
                             </tr>
                             <tr>
                                 <td><strong>DMA 528</strong></td>
                                 <td>Miami</td>
-                                <td><strong>4.0%</strong></td>
-                                <td><strong>$40,000</strong></td>
+                                <td>4.0%</td>
+                                <td>$40,000</td>
                             </tr>
                             <tr>
                                 <td><strong>DMA 798</strong></td>
-                                <td>Glendive (Small Town)</td>
-                                <td><strong>0.5%</strong></td>
-                                <td><strong>$5,000</strong></td>
+                                <td>Glendive (Small Market)</td>
+                                <td>0.5%</td>
+                                <td>$5,000</td>
                             </tr>
                             <tr>
-                                <td><em>All other DMAs</em></td>
+                                <td><em>Remaining DMAs</em></td>
                                 <td>Rest of United States</td>
                                 <td>85.5%</td>
                                 <td>$855,000</td>
                             </tr>
                             <tr style="background: #f8fafc; font-weight: bold;">
-                                <td>TOTAL</td>
-                                <td>National</td>
+                                <td>NATIONAL TOTAL</td>
+                                <td>All DMAs</td>
                                 <td>100.0%</td>
                                 <td>$1,000,000</td>
                             </tr>
@@ -634,55 +678,60 @@ html_content = """<!DOCTYPE html>
                     </table>
                 </div>
 
-                <h3>The TTD Setup</h3>
-                <p>
-                    Evan’s agency team sets up <strong>one single national campaign</strong> in The Trade Desk with a total monthly budget cap of <strong>$1,000,000</strong>. They do <strong>not</strong> set individual dollar budgets for New York or Miami in TTD.
-                </p>
+                <div class="qa-card">
+                    <div class="qa-question">
+                        <span class="qa-badge">Q7</span>
+                        <span>How is the campaign configured in TTD at this point?</span>
+                    </div>
+                    <div class="qa-answer">
+                        <p>Evan's trading operations configure <strong>one single national campaign</strong> in TTD with a global budget cap of <strong>$1,000,000</strong>. No fixed line-item budgets are applied to individual DMAs in the platform interface.</p>
+                    </div>
+                </div>
             </section>
 
-            <!-- SECTION 6: PHASE 1 -->
+            <!-- SECTION 6: PHASE 1 AS Q&A -->
             <section id="phase1">
-                <h2>6. Phase 1: Day 1 (Nov 1) — How Does It Start?</h2>
-                <p>Evan explained in the transcript that Day 1 execution depends on whether the campaign is brand new or carried over:</p>
+                <h2>6. Phase 1: Day 1 (Nov 1) — Initialization Strategy</h2>
 
-                <div class="step-box">
-                    <div class="step-box-header">
-                        <span class="step-box-title">Case A: Brand New Campaign (Starting Fresh)</span>
-                        <span class="step-box-tag">Transcript [13:07]</span>
+                <div class="qa-card">
+                    <div class="qa-question">
+                        <span class="qa-badge">Q8</span>
+                        <span>What bidding strategy does TTD apply on Day 1 before actual spend telemetry is collected?</span>
                     </div>
-                    <div class="quote-box">
-                        "If we're starting fresh, then we first just say okay... we have an understanding of the goal for each DMA... it will start at like one [Bid Factor = 1.0]."
-                    </div>
-                    <p style="margin-top: 10px;">
-                        The system sets the initial <strong>Bid Factor = 1.0 (Neutral/Baseline)</strong> for all DMAs. TTD bids normal auction prices everywhere for the first few days while the system gathers live baseline spend telemetry.
-                    </p>
-                </div>
+                    <div class="qa-answer">
+                        <p>Day 1 execution strategy is determined by whether the campaign is initiating a fresh cycle or rolling over from the prior month:</p>
+                        
+                        <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px; margin: 12px 0;">
+                            <strong>Scenario A: Fresh Campaign Initialization</strong>
+                            <p style="margin-top: 6px;">When launching without historical pacing telemetry, Databricks initializes all 210 DMAs at an unweighted baseline <strong>Bid Factor of 1.0x</strong>. The platform submits standard clearing bids across all regions during the opening days to observe natural inventory liquidity and baseline win rates.</p>
+                        </div>
 
-                <div class="step-box">
-                    <div class="step-box-header">
-                        <span class="step-box-title">Case B: Ongoing Campaign (Carried Over from October)</span>
-                        <span class="step-box-tag">Transcript [15:14]</span>
+                        <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px; margin: 12px 0;">
+                            <strong>Scenario B: Recurring Monthly Cycle</strong>
+                            <p style="margin-top: 6px;">When continuing active campaigns from the preceding month, Databricks evaluates October's historical clearing rates against November's updated propensity targets. The engine pre-seeds Day 1 with an empirical multiplier (e.g., initiating New York at 1.2x if prior run-rates required that level) to achieve faster equilibrium.</p>
+                        </div>
                     </div>
-                    <div class="quote-box">
-                        "If we're not starting fresh... we will then on day one estimate what we need to change the bid factors to try to meet these new goals and then we tune it every other day..."
-                    </div>
-                    <p style="margin-top: 10px;">
-                        Databricks evaluates October's historical spend rates per DMA and seeds Day 1 with an estimated initial bid factor (e.g., if NY required 1.2x last month to hit 10%, it starts near 1.2x).
-                    </p>
                 </div>
             </section>
 
-            <!-- SECTION 7: PHASE 2 -->
+            <!-- SECTION 7: PHASE 2 AS Q&A -->
             <section id="phase2">
-                <h2>7. Phase 2: The Core Formulas (Running in Databricks)</h2>
-                <p>Every 1 to 2 days, a scheduled Databricks job executes three automated mathematical formulas for every DMA:</p>
+                <h2>7. Phase 2: Core Pacing Formulas (Running in Databricks)</h2>
+
+                <div class="qa-card">
+                    <div class="qa-question">
+                        <span class="qa-badge">Q9</span>
+                        <span>What exact mathematical formulas run every 24 to 48 hours to recalibrate bid factors?</span>
+                    </div>
+                    <div class="qa-answer">
+                        <p>Every 24 to 48 hours, the Databricks pacing script queries live telemetry from the TTD API and computes three sequential mathematical formulas for each market:</p>
+                    </div>
+                </div>
 
                 <!-- FORMULA 1 -->
                 <div class="formula-card">
-                    <div class="formula-title">
-                        <span>Formula 1: Daily Run-Rate</span>
-                    </div>
-                    <p>Calculates the average dollars spent per day up to the current date:</p>
+                    <div class="formula-title">Formula 1: Empirical Daily Run-Rate</div>
+                    <p>Measures the historical daily burn rate up to the current observation day:</p>
                     <div class="math-display">
 <span class="var">Average Daily Spend</span> = <span class="var">Month-to-Date (MTD) Spend</span> <span class="op">/</span> <span class="var">Current Day of Month</span>
                     </div>
@@ -690,150 +739,156 @@ html_content = """<!DOCTYPE html>
 
                 <!-- FORMULA 2 -->
                 <div class="formula-card">
-                    <div class="formula-title">
-                        <span>Formula 2: Month-End Projected Spend</span>
-                    </div>
-                    <p>Projects what the DMA will spend by Day 30 if current bidding speed continues:</p>
+                    <div class="formula-title">Formula 2: Linear Month-End Projection</div>
+                    <p>Projects total month-end expenditure assuming current clearing velocity persists:</p>
                     <div class="math-display">
 <span class="var">Projected Monthly Spend</span> = <span class="var">MTD Spend</span> <span class="op">+</span> (<span class="var">Average Daily Spend</span> <span class="op">×</span> <span class="var">Days Remaining</span>)
-<span style="color: #64748b;">// Or simply: Average Daily Spend × 30 days</span>
                     </div>
                 </div>
 
                 <!-- FORMULA 3 -->
                 <div class="formula-card">
-                    <div class="formula-title">
-                        <span>Formula 3: The New Bid Factor Update (The Ratio)</span>
-                    </div>
-                    <p>Calculates the exact multiplier adjustment required to bring projected spend back in line with our model's goal:</p>
+                    <div class="formula-title">Formula 3: Bid Factor Recalibration Ratio</div>
+                    <p>Calculates the proportional adjustment factor required to converge projected spend to our model's target:</p>
                     <div class="math-display">
 <span class="var">New Bid Factor</span> = <span class="var">Current Bid Factor</span> <span class="op">×</span> ( <span class="var">Target Monthly Spend</span> <span class="op">/</span> <span class="var">Projected Monthly Spend</span> )
                     </div>
                 </div>
             </section>
 
-            <!-- SECTION 8: PHASE 3 -->
+            <!-- SECTION 8: PHASE 3 AS Q&A -->
             <section id="phase3">
                 <h2>8. Phase 3: Step-by-Step Iteration (Days 1 to 30)</h2>
-                <p>Let's trace <strong>New York (Goal: $100,000)</strong> and <strong>Miami (Goal: $40,000)</strong> across the month:</p>
 
-                <!-- DAY 5 -->
-                <div class="step-box">
-                    <div class="step-box-header">
-                        <span class="step-box-title">Day 5: First Check (Nov 5)</span>
-                        <span class="step-box-tag">Days Elapsed: 5 | Days Remaining: 25</span>
+                <div class="qa-card">
+                    <div class="qa-question">
+                        <span class="qa-badge">Q10</span>
+                        <span>Day 5 Check: How does the system handle an under-pacing market vs an over-pacing market?</span>
                     </div>
+                    <div class="qa-answer">
+                        <p>Tracing the live telemetry at Day 5 (Days Elapsed: 5 | Days Remaining: 25):</p>
 
-                    <h4 style="color: #2563eb; margin: 10px 0 6px;">New York (Target: $100,000 | Target Daily Pace = $3,333/day)</h4>
-                    <p>• <strong>Actual MTD Spend after 5 days:</strong> $12,500 ($2,500/day).<br>
-                    • <strong>Projected Spend by Day 30:</strong> $2,500 × 30 = <strong>$75,000</strong> (Under-pacing by $25,000!)</p>
-                    <div class="calculation-block">
-The Math:
-Ratio = Target Spend ($100,000) / Projected Spend ($75,000) = 1.33
+                        <h4 style="color: #2563eb; margin: 14px 0 6px;">Case 1: New York (Under-pacing Goal of $100,000 | Pace: $3,333/day)</h4>
+                        <p>• <strong>Actual Telemetry at Day 5:</strong> $12,500 spent ($2,500/day).<br>
+                        • <strong>Projected Month-End Spend:</strong> $2,500 × 30 = <strong>$75,000</strong> (Under-pacing target by $25,000).</p>
+                        <div class="calculation-block">
+Adjustment Ratio = Target ($100,000) / Projected ($75,000) = 1.33
 New Bid Factor = 1.0 × 1.33 = 1.33x
-                    </div>
-                    <p>• <strong>Automated Action:</strong> Databricks calls the TTD API: <code>Set New York Bid Factor = 1.33x</code>.<br>
-                    • <strong>Real-World Impact:</strong> TTD bids 33% higher for impressions in New York. It starts winning more auctions, and spending speeds up.</p>
+                        </div>
+                        <p>• <strong>Automated Action:</strong> Databricks calls the TTD API: <code>Set New York Bid Factor = 1.33x</code>.<br>
+                        • <strong>Market Result:</strong> Base bids elevate by 33%, securing broader programmatic inventory and accelerating spend.</p>
 
-                    <hr style="border: 0; border-top: 1px solid #e2e8f0; margin: 16px 0;">
+                        <hr style="border: 0; border-top: 1px solid #e2e8f0; margin: 16px 0;">
 
-                    <h4 style="color: #059669; margin: 10px 0 6px;">Miami (Target: $40,000 | Target Daily Pace = $1,333/day)</h4>
-                    <p>• <strong>Actual MTD Spend after 5 days:</strong> $10,000 ($2,000/day).<br>
-                    • <strong>Projected Spend by Day 30:</strong> $2,000 × 30 = <strong>$60,000</strong> (Over-pacing by $20,000!)</p>
-                    <div class="calculation-block">
-The Math:
-Ratio = Target Spend ($40,000) / Projected Spend ($60,000) = 0.67
+                        <h4 style="color: #059669; margin: 14px 0 6px;">Case 2: Miami (Over-pacing Goal of $40,000 | Pace: $1,333/day)</h4>
+                        <p>• <strong>Actual Telemetry at Day 5:</strong> $10,000 spent ($2,000/day).<br>
+                        • <strong>Projected Month-End Spend:</strong> $2,000 × 30 = <strong>$60,000</strong> (Over-pacing target by $20,000).</p>
+                        <div class="calculation-block">
+Adjustment Ratio = Target ($40,000) / Projected ($60,000) = 0.67
 New Bid Factor = 1.0 × 0.67 = 0.67x
+                        </div>
+                        <p>• <strong>Automated Action:</strong> Databricks calls the TTD API: <code>Set Miami Bid Factor = 0.67x</code>.<br>
+                        • <strong>Market Result:</strong> Bids drop by 33%, throttling back aggressive spend to avoid prematurely exhausting regional budget.</p>
                     </div>
-                    <p>• <strong>Automated Action:</strong> Databricks calls the TTD API: <code>Set Miami Bid Factor = 0.67x</code>.<br>
-                    • <strong>Real-World Impact:</strong> TTD bids 33% lower in Miami. It loses lower-value auctions, and spending slows down.</p>
                 </div>
 
-                <!-- DAY 15 -->
-                <div class="step-box">
-                    <div class="step-box-header">
-                        <span class="step-box-title">Day 15: Mid-Month Recalibration (Nov 15)</span>
-                        <span class="step-box-tag">Days Elapsed: 15 | Days Remaining: 15</span>
+                <div class="qa-card">
+                    <div class="qa-question">
+                        <span class="qa-badge">Q11</span>
+                        <span>Day 15 Check: How does mid-flight recalibration prevent over-correction?</span>
                     </div>
-
-                    <h4 style="color: #2563eb; margin: 10px 0 6px;">New York</h4>
-                    <p>Because the bid factor was raised to 1.33x, daily spend increased from $2,500/day to $3,800/day.</p>
-                    <p>• <strong>Actual MTD Spend (Day 1 to 15):</strong> $12,500 + (10 × $3,800) = <strong>$50,500</strong>.<br>
-                    • <strong>Remaining Budget Needed:</strong> $100,000 - $50,500 = $49,500 over 15 days (≈ $3,300/day).<br>
-                    • <strong>Projected Spend:</strong> At current pace ($3,800/day), it would reach $50,500 + (15 × $3,800) = <strong>$107,500</strong> (Slightly over-correcting!)</p>
-                    <div class="calculation-block">
-The Math:
+                    <div class="qa-answer">
+                        <p>Supported by the 1.33x multiplier, New York's daily clearing velocity expanded from $2,500/day to $3,800/day.</p>
+                        <p>• <strong>Actual Cumulative Spend:</strong> $12,500 + (10 × $3,800) = <strong>$50,500</strong>.<br>
+                        • <strong>Residual Budget Required:</strong> $100,000 - $50,500 = $49,500 over 15 days (≈ $3,300/day).<br>
+                        • <strong>Unadjusted Run-Rate Projection:</strong> $50,500 + (15 × $3,800) = <strong>$107,500</strong> (Projecting slightly over target).</p>
+                        <div class="calculation-block">
 Adjustment Ratio = Target ($100,000) / Projected ($107,500) = 0.93
 New Bid Factor = 1.33 × 0.93 = 1.24x
+                        </div>
+                        <p>• <strong>Automated Action:</strong> The multiplier relaxes to 1.24x, tapping the brakes slightly to guarantee exact glide-path convergence by month-end.</p>
                     </div>
-                    <p>• <strong>Automated Action:</strong> Databricks calls TTD API: <code>Set New York Bid Factor = 1.24x</code>.<br>
-                    • <strong>Real-World Impact:</strong> Databricks slightly eases off the gas to keep New York right on target.</p>
                 </div>
 
-                <!-- DAY 25 -->
-                <div class="step-box">
-                    <div class="step-box-header">
-                        <span class="step-box-title">Day 25: Fine-Tuning Near Month-End (Nov 25)</span>
-                        <span class="step-box-tag">Days Elapsed: 25 | Days Remaining: 5</span>
+                <div class="qa-card">
+                    <div class="qa-question">
+                        <span class="qa-badge">Q12</span>
+                        <span>Day 25 Check: How does the system stabilize as the flight terminates?</span>
                     </div>
-                    <h4 style="color: #2563eb; margin: 10px 0 6px;">New York</h4>
-                    <p>• <strong>MTD Spend:</strong> $84,000.<br>
-                    • <strong>Remaining to hit target:</strong> $16,000 in 5 days ($3,200/day).<br>
-                    • <strong>Current pace:</strong> $3,250/day.<br>
-                    • <strong>Bid Factor:</strong> Kept stable at <strong>1.22x</strong>.</p>
+                    <div class="qa-answer">
+                        <p>• <strong>Actual Cumulative Spend:</strong> $84,000.<br>
+                        • <strong>Residual Deficit to Target:</strong> $16,000 across 5 remaining days ($3,200/day).<br>
+                        • <strong>Observed Velocity:</strong> $3,250/day. The multiplier is maintained stable at <strong>1.22x</strong>.</p>
+                    </div>
                 </div>
             </section>
 
-            <!-- SECTION 9: RECONCILIATION -->
+            <!-- SECTION 9: RECONCILIATION AS Q&A -->
             <section id="reconciliation">
                 <h2>9. Day 30: Final Results & Performance Reconciliation</h2>
+
+                <div class="qa-card">
+                    <div class="qa-question">
+                        <span class="qa-badge">Q13</span>
+                        <span>What are the final reconciliation results at month-end across different market tiers?</span>
+                    </div>
+                    <div class="qa-answer">
+                        <p>The final audit categorizes DMAs into "Inline" and "Outlier" performance bands:</p>
+                    </div>
+                </div>
+
                 <div class="table-responsive">
                     <table>
                         <thead>
                             <tr>
-                                <th>DMA Name</th>
-                                <th>Model Target Budget</th>
-                                <th>Final Month Spend</th>
-                                <th>Delivery %</th>
-                                <th>Status in Excel Report</th>
-                                <th>Operational Notes</th>
+                                <th>Designated Market Area</th>
+                                <th>Model Target Allocation</th>
+                                <th>Actual Month Spend</th>
+                                <th>Delivery Adherence %</th>
+                                <th>Audit Classification</th>
+                                <th>Operational Dynamic</th>
                             </tr>
                         </thead>
                         <tbody>
                             <tr>
                                 <td><strong>New York</strong></td>
                                 <td>$100,000</td>
-                                <td><strong>$99,400</strong></td>
+                                <td>$99,400</td>
                                 <td>99.4%</td>
                                 <td><span class="badge-inline">Inline</span></td>
-                                <td>Within ~1% margin of error.</td>
+                                <td>High-liquidity market; converged within ~1% variance.</td>
                             </tr>
                             <tr>
                                 <td><strong>Miami</strong></td>
                                 <td>$40,000</td>
-                                <td><strong>$40,250</strong></td>
+                                <td>$40,250</td>
                                 <td>100.6%</td>
                                 <td><span class="badge-inline">Inline</span></td>
-                                <td>Within ~1% margin of error.</td>
+                                <td>Bid suppression successfully averted over-expenditure.</td>
                             </tr>
                             <tr>
-                                <td><strong>Glendive (Small Town)</strong></td>
+                                <td><strong>Glendive (Small Market)</strong></td>
                                 <td>$5,000</td>
-                                <td><strong>$1,800</strong></td>
+                                <td>$1,800</td>
                                 <td>36.0%</td>
                                 <td><span class="badge-outlier">Outlier</span></td>
-                                <td>Hit the 5.0x cap, ran out of ad inventory.</td>
+                                <td>Exhausted local inventory; bounded by 5.0x safety cap.</td>
                             </tr>
                         </tbody>
                     </table>
                 </div>
 
-                <h3>What Happened to Glendive (The Small DMA)?</h3>
-                <div class="step-box" style="border-left: 4px solid var(--warning);">
-                    <p>1. <strong>Target:</strong> $5,000.</p>
-                    <p>2. The algorithm saw it was severely under-spending on Day 5 and increased the Bid Factor to 2.0x, then 3.5x, and eventually reached the <strong>safety cap of 5.0x</strong>.</p>
-                    <p>3. But because Glendive only has a few thousand residents, there were <strong>no more impressions left to buy</strong>, even with maximum bids.</p>
-                    <p>4. The unspent $3,200 remained in the national pool and was absorbed by larger DMAs (like New York and Chicago), ensuring the <strong>full $1,000,000 national campaign budget was 100% delivered</strong>.</p>
+                <div class="qa-card" style="border-left: 4px solid var(--warning);">
+                    <div class="qa-question">
+                        <span class="qa-badge" style="background: #fef3c7; color: #b45309; border-color: #fde68a;">Q14</span>
+                        <span>Why did Glendive under-index, and what happened to its unspent budget?</span>
+                    </div>
+                    <div class="qa-answer">
+                        <p>1. <strong>Model Target:</strong> $5,000 target budget.</p>
+                        <p>2. <strong>Bidding Escalation:</strong> Observing under-pacing, Databricks escalated the bid factor across successive iterations (2.0x, 3.5x), ultimately hitting the <strong>5.0x safety ceiling</strong>.</p>
+                        <p>3. <strong>Inventory Exhaustion:</strong> Because Glendive is a low-population market, available programmatic impression supply was fully exhausted. Even with a 500% bid premium, no additional impressions existed to clear.</p>
+                        <p>4. <strong>100% Budget Delivery:</strong> Because TTD was configured as a unified national campaign rather than fragmented silos, the unspent $3,200 was dynamically cleared across larger, inventory-rich DMAs. This guaranteed <strong>100% total campaign budget delivery ($1,000,000 fully spent)</strong> without leaving unused client capital on the table.</p>
+                    </div>
                 </div>
             </section>
 
@@ -844,11 +899,8 @@ New Bid Factor = 1.33 × 0.93 = 1.24x
 </html>
 """
 
-# Write to file
 output_file = Path("TTD_Automation_Documentation.html")
 output_file.write_text(html_content, encoding="utf-8")
 
 print(f"✅ HTML documentation updated successfully: {output_file.resolve()}")
-
-# Open in browser automatically
 webbrowser.open(f"file://{output_file.resolve()}")
