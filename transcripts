@@ -1,0 +1,44 @@
+import os
+from pathlib import Path
+import whisper
+
+# 1. Path to your downloaded video file
+# You can use the exact path to your Downloads folder:
+downloads_path = Path.home() / "Downloads"
+video_filename = (
+    "TTD Automation Approach Walkthrough-20261112_213507-Meeting Recording.mp4"
+)
+video_file = downloads_path / video_filename
+
+# Output file path
+output_txt = downloads_path / "Meeting_Transcript.txt"
+
+print(f"Loading file: {video_file}")
+
+if not video_file.exists():
+    print(f"Error: Could not find file at {video_file}")
+    exit(1)
+
+# 2. Load the Whisper model locally
+# Options: 'tiny', 'base', 'small', 'medium'
+# 'base' or 'small' are recommended for standard office laptops (good accuracy + fast on CPU)
+print("Loading local Whisper model (running offline on your PC)...")
+model = whisper.load_model("base")
+
+# 3. Transcribe directly from the MP4 file
+print("Transcribing... This may take a few minutes depending on meeting length.")
+result = model.transcribe(str(video_file), fp16=False)
+
+# 4. Save the full transcript and timestamped version
+with open(output_txt, "w", encoding="utf-8") as f:
+    f.write("=== FULL TRANSCRIPT ===\n\n")
+    f.write(result["text"])
+    f.write("\n\n=== TIMESTAMPS ===\n\n")
+    for segment in result["segments"]:
+        start = int(segment["start"])
+        end = int(segment["end"])
+        f.write(
+            f"[{start//60:02d}:{start%60:02d} -> {end//60:02d}:{end%60:02d}] {segment['text'].strip()}\n"
+        )
+
+print(f"\n Transcription complete! Saved to:\n{output_txt}")
