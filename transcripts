@@ -904,3 +904,22 @@ output_file.write_text(html_content, encoding="utf-8")
 
 print(f"✅ HTML documentation updated successfully: {output_file.resolve()}")
 webbrowser.open(f"file://{output_file.resolve()}")
+
+
+
+``````````````````````````````````````````````````````````````````````````````````````````````
+
+Read from the processed Delta table `kvai-pro110033`.dev.circana_instore_ntg_aveeno_sun_protection_processed_20261117 (columns: year, week_number, week_start, week_end, Product, Geography, dma_id, dollar_sales). Do NOT sum across all Product values since Product mixes hierarchy levels.
+Perform Task 1: Product Hierarchy Validation & Platform Breakdown:
+List all distinct Product values containing NEUTROGENA (plus SUN PROTECTION), with their total dollar_sales, row count, and % share of NEUTROGENA SUN PRTCTN (sorted by dollar_sales descending). Also verify how many distinct Product values match UPPER(Product) LIKE '%ULTRA SHEER%'.
+NTG Sun Hierarchy Reconciliation (overall & by year): Compare dollar_sales of NEUTROGENA SUN PRTCTN (Brand Total) against the sum of dollar_sales of all OTHER Product values starting with NEUTROGENA (excluding NEUTROGENA SUN PRTCTN). Show:
+ntg_brand_total (NEUTROGENA SUN PRTCTN)
+ntg_sublines_sum (sum of all other NEUTROGENA% rows)
+difference (ntg_brand_total - ntg_sublines_sum)
+sublines_pct_of_brand_total (ntg_sublines_sum / ntg_brand_total * 100)
+Granular DMA-Week Check: At the (week_end, dma_id) level, check if there are any rows where ntg_brand_total < ntg_sublines_sum, or where NEUTROGENA SUN PRTCTN > SUN PROTECTION, or where NEUTROGENA ULTRA SHEER SUN PRTCTN > NEUTROGENA SUN PRTCTN. Report the count of violations (if any) and min/max differences.
+Quick Sizing Baseline (overall & by year): Show a clean summary table comparing the 3 target series side by side:
+SUN PROTECTION (Total Sun Category)
+NEUTROGENA SUN PRTCTN (Total NTG Sun) + its % share of SUN PROTECTION
+NEUTROGENA ULTRA SHEER SUN PRTCTN (Ultra Sheer) + its % share of NEUTROGENA SUN PRTCTN
+Print clean summary tables and clear key takeaways.
