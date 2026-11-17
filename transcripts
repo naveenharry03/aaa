@@ -923,3 +923,124 @@ SUN PROTECTION (Total Sun Category)
 NEUTROGENA SUN PRTCTN (Total NTG Sun) + its % share of SUN PROTECTION
 NEUTROGENA ULTRA SHEER SUN PRTCTN (Ultra Sheer) + its % share of NEUTROGENA SUN PRTCTN
 Print clean summary tables and clear key takeaways.
+
+
+
+````````````````````````
+
+Pair 1: Setup & Data Quality Check (Duplicate Check)
+Markdown Cell (paste first):
+
+%md
+# Task 1: Product Hierarchy Check & Brand Breakdown (Neutrogena Sun)
+
+### Step 1.1 — Understand the Product Column & Check for Duplicate Rows
+**Why this step is needed:**
+In Circana data, the `Product` column mixes **3 different levels** in the same table:
+1. **Whole Market (Category Total):** `SUN PROTECTION` *(Neutrogena + Aveeno + all competitors)*
+2. **Whole Brand (Brand Total):** `NEUTROGENA SUN PRTCTN` *(All Neutrogena sunscreens combined)*
+3. **Individual Product Lines:** The 20 specific Neutrogena lines *(like Ultra Sheer, Beach Defense, Sport, Clear Face, etc.)*
+
+⚠️ **Rule:** We must **never** add all rows in this table together, or we will double-count sales.
+
+**Quick Data Quality Check below:**
+Earlier we saw `253 weeks × 196 markets = 49,588` expected rows per product, yet `NEUTROGENA SUN PRTCTN` had `49,589` rows (1 extra row). Below we inspect that 1 extra row so everything stays 100% transparent.
+
+
+
+from pyspark.sql import functions as F
+import pandas as pd
+import matplotlib.pyplot as plt
+
+TABLE = "`kvai-pro110033`.dev.circana_instore_ntg_aveeno_sun_protection_processed_20261117"
+
+CAT = "SUN PROTECTION"                      # Whole Sun Category (All brands)
+NTG = "NEUTROGENA SUN PRTCTN"               # Total Neutrogena Sun
+US  = "NEUTROGENA ULTRA SHEER SUN PRTCTN"   # Ultra Sheer Product Line
+
+df_sales = spark.table(TABLE).withColumn("Product", F.trim("Product"))
+
+# Check for any duplicate (week_end, dma_id, Product) rows within Category & Neutrogena
+ntg_and_cat = df_sales.filter((F.col("Product") == CAT) | F.upper("Product").startswith("NEUTROGENA"))
+dup_keys = ntg_and_cat.groupBy("week_end", "dma_id", "Product").count().filter("count > 1")
+
+print(f"Duplicate (Week × Market × Product) rows in Category/NTG: {dup_keys.count()}")
+display(ntg_and_cat.join(dup_keys.drop("count"), ["week_end", "dma_id", "Product"]))
+
+
+````````````````````
+
+Pair 2: What Makes Up Neutrogena Sun? (Visual Breakdown + Ultra Sheer Check)
+Markdown Cell (paste above Code Cell 2):
+
+%md
+### Step 1.2 — Which Product Lines Drive Neutrogena Sun Sales? (2022–2026)
+**What this answers for Yue:**
+1. **Ultra Sheer Check:** Confirms how many rows match `"ULTRA SHEER"` (is it just 1 product line or multiple?).
+2. **Product Mix:** Shows every individual Neutrogena product line ranked from largest to smallest, with a clear visual chart so we can immediately see which lines matter most.
+
+
+
+# 1. Confirm Ultra Sheer variations
+us_matches = (
+    df_sales.filter(F.upper("Product").like("%ULTRA SHEER%"))
+    .select("Product").distinct().orderBy("Product")
+)
+print(f"Number of products matching 'ULTRA SHEER': {us_matches.count()}")
+display(us_matches)
+
+# 2. Breakdown of all 20 Individual Neutrogena Product Lines (excluding the Brand Total row)
+ntg_total_sales = df_sales.filter(F.col("Product") == NTG).agg(F.sum("dollar_sales")).first()[0]
+
+lines_pdf = (
+    df_sales.filter(F.upper("Product").startswith("NEUTROGENA") & (F.col("Product") != NTG))
+    .groupBy("Product")
+    .agg(
+        F.sum("dollar_sales").cast("long").alias("dollar_sales"),
+        F.count("*").alias("row_count")
+    )
+    .withColumn("sales_millions", F.round(F.col("dollar_sales") / 1e6, 2))
+    .withColumn("share_of_ntg_pct", F.round(F.col("dollar_sales") / F.lit(ntg_total_sales) * 100, 2))
+    .orderBy(F.desc("dollar_sales"))
+    .toPandas()
+)
+
+# Clean display name (remove repetitive prefix/suffix for nicer chart labels)
+lines_pdf["clean_name"] = (
+    lines_pdf["Product"]
+    .str.replace("NEUTROGENA ", "", regex=False)
+    .str.replace(" SUN PRTCTN", "", regex=False)
+)
+
+display(lines_pdf[["Product", "sales_millions", "share_of_ntg_pct", "row_count"]])
+
+# 3. Chart: Top 10 Neutrogena Product Lines + "All Other 10 Lines"
+top10 = lines_pdf.head(10).copy()
+others_row = pd.DataFrame([{
+    "clean_name": "OTHER 10 LINES COMBINED",
+    "sales_millions": lines_pdf.iloc[10:]["sales_millions"].sum(),
+    "share_of_ntg_pct": lines_pdf.iloc[10:]["share_of_ntg_pct"].sum(),
+}])
+plot_df = pd.concat([top10[["clean_name", "sales_millions", "share_of_ntg_pct"]], others_row], ignore_index=True)
+plot_df = plot_df.iloc[::-1]  # reverse so biggest is at top
+
+fig, ax = plt.subplots(figsize=(11, 6))
+bar_colors = ["#54A24B" if "ULTRA SHEER" in n else ("#F58518" if "BEACH DEFENSE" == n else "#4C78A8") for n in plot_df["clean_name"]]
+bars = ax.barh(plot_df["clean_name"], plot_df["sales_millions"], color=bar_colors)
+
+for bar, (_, r) in zip(bars, plot_df.iterrows()):
+    ax.text(bar.get_width() + 8, bar.get_y() + bar.get_height()/2,
+            f"${r['sales_millions']:.1f}M ({r['share_of_ntg_pct']:.1f}%)",
+            va="center", fontsize=9.5, fontweight="bold")
+
+ax.set_xlim(0, plot_df["sales_millions"].max() * 1.25)
+ax.set_xlabel("Total Sales ($ Millions, 2022–2026)")
+ax.set_title("Neutrogena Sun Sales by Product Line\n(Green = Ultra Sheer #1 | Orange = Beach Defense #2)", fontweight="bold", fontsize=12)
+ax.grid(axis="x", alpha=0.3)
+plt.tight_layout()
+plt.show()
+
+
+```````````````````````
+
+
