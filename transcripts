@@ -1211,3 +1211,242 @@ print("3. BIG BUSINESS INSIGHT — NTG SHARE DECLINE: While Total Sun Category g
 print("   from 2022 to 2026, Neutrogena's market share peaked in 2023 (18.98%) and dropped")
 print("   to 16.19% in 2026 YTD. Meanwhile, Ultra Sheer stayed rock-steady at 41%-43% of NTG.")
 print("=" * 70)
+
+
+
+
+```````````````````````````````````````````````````````````````````
+Pair 1: Setup & 5-Year Weekly Trend (Indexed Comparison)
+
+%md
+## Task 2: Seasonality & Time Patterns ("Everyday" Ultra Sheer vs. "Seasonal" Beach Defense)
+
+### Step 2.1 — Load Target Series & Compare Full 5-Year Weekly Trends (2022–2026)
+**What this cell does:**
+- Loads the 6 key series directly from our processed table (safely merging the 1 Cedar Rapids split row so every Market-Week is unique):
+  - **Benchmarks:** `Total Sun Category` & `Total NTG Sun`
+  - **Top 4 NTG Platforms:** `Ultra Sheer` (41.8%), `Beach Defense` (26.5%), `Clear Face` (9.7%), and `Sport` (6.2%)
+- Plots the **253-week trend (2022–2026)** on an **Indexed scale (`Average Week = 100`)** so we can lay smaller lines (`Beach Defense`, `Ultra Sheer`) right on top of `Total Sun` to compare peaks, troughs, and year-over-year shape.
+- Prints the **Weekly Correlation Matrix** (`1.00` = moves identically week-by-week).
+
+
+from pyspark.sql import functions as F
+import pandas as pd
+import matplotlib.pyplot as plt
+
+TABLE = "`kvai-pro110033`.dev.circana_instore_ntg_aveeno_sun_protection_processed_20261117"
+
+PRODUCT_MAP = {
+    "SUN PROTECTION": "Total Sun Category",
+    "NEUTROGENA SUN PRTCTN": "Total NTG Sun",
+    "NEUTROGENA ULTRA SHEER SUN PRTCTN": "Ultra Sheer",
+    "NEUTROGENA BEACH DEFENSE SUN PRTCTN": "Beach Defense",
+    "NEUTROGENA CLEAR FACE SUN PRTCTN": "Clear Face",
+    "NEUTROGENA SPORT SUN PRTCTN": "Sport",
+}
+
+# Load and safely aggregate to exact (Week × DMA × Product) grain
+df_t2 = (
+    spark.table(TABLE)
+    .withColumn("Product", F.trim("Product"))
+    .filter(F.col("Product").isin(list(PRODUCT_MAP.keys())))
+    .groupBy("year", "week_start", "week_end", "Product", "Geography", "dma_id")
+    .agg(F.sum("dollar_sales").cast("long").alias("dollar_sales"))
+    .withColumn("iso_week", F.weekofyear("week_end"))
+    .withColumn("month", F.month("week_end"))
+)
+
+# National weekly sales table in Pandas
+nat_wk = (
+    df_t2.groupBy("year", "week_end", "iso_week", "month", "Product")
+    .agg(F.sum("dollar_sales").cast("long").alias("dollar_sales"))
+    .toPandas()
+)
+nat_wk["week_end"] = pd.to_datetime(nat_wk["week_end"])
+nat_wk["series"] = nat_wk["Product"].map(PRODUCT_MAP)
+
+piv_wk = (
+    nat_wk.pivot(index=["year", "week_end", "iso_week", "month"], columns="series", values="dollar_sales")
+    .reset_index()
+    .sort_values("week_end")
+)
+
+main_cols = ["Total Sun Category", "Total NTG Sun", "Ultra Sheer", "Beach Defense"]
+plat_cols = ["Ultra Sheer", "Beach Defense", "Clear Face", "Sport"]
+all_cols  = ["Total Sun Category", "Total NTG Sun", "Ultra Sheer", "Beach Defense", "Clear Face", "Sport"]
+
+# Index each series so its 5-year average week = 100
+fig, ax = plt.subplots(figsize=(15, 5))
+palette = {
+    "Total Sun Category": ("#4C78A8", "-", 1.8),
+    "Total NTG Sun":      ("#7F7F7F", ":", 2.0),
+    "Ultra Sheer":        ("#54A24B", "-", 2.1),
+    "Beach Defense":      ("#F58518", "--", 2.1),
+}
+
+for col in main_cols:
+    idx_vals = piv_wk[col] / piv_wk[col].mean() * 100
+    c, ls, lw = palette[col]
+    ax.plot(piv_wk["week_end"], idx_vals, label=col, color=c, linestyle=ls, linewidth=lw)
+
+ax.axhline(100, color="black", linestyle=":", linewidth=0.9, alpha=0.6, label="5-Year Avg Week (100)")
+ax.set_title("5-Year Weekly Sales Trend (2022–2026) — Indexed (Average Week = 100)", fontweight="bold", fontsize=13)
+ax.set_ylabel("Sales Index (100 = 5-Yr Avg Week)")
+ax.set_xlabel("Week Ending")
+ax.legend(ncol=3)
+ax.grid(True, alpha=0.3)
+plt.tight_layout()
+plt.show()
+
+print("National Weekly Correlation Matrix (253 Weeks):")
+display(piv_wk[all_cols].corr().round(4))
+
+
+``````````````````````````````````````````````````
+Pair 2: Week 1–52 Seasonality Curve (Everyday vs. Seasonal Test)
+
+%md
+### Step 2.2 — Seasonality Curve (Week 1 to Week 52): Ultra Sheer ("Everyday") vs. Beach Defense ("Seasonal")
+**What this directly tests:**
+Yue described **Ultra Sheer** as an *"everyday"* product and **Beach Defense** as a *"seasonal"* product. Let's check if the numbers prove that!
+- Using **3 full calendar years (2023–2025)**, we average each week of the year (`Week 1 = early Jan`, `Week 26 = late June`, `Week 52 = late Dec`) and express it as a **Seasonality Index** (`1.0x = average week of the year`).
+- **Left Chart:** Compares `Total Sun`, `Total NTG Sun`, `Ultra Sheer`, and `Beach Defense`.
+- **Right Chart:** Compares the **Top 4 Neutrogena Platforms** (`Ultra Sheer`, `Beach Defense`, `Clear Face`, `Sport`).
+- **Table below:** Splits the year into **Peak (May–Aug)**, **Shoulder (Mar–Apr & Sep–Oct)**, and **Off-Season (Nov–Feb)** and calculates the **Peak-to-Trough Ratio** (`Highest Summer Week ÷ Lowest Winter Week`).
+  - *Higher Peak-to-Trough = more extreme summer-only seasonality.*
+  - *Higher Off-Season % = more year-round / "everyday" usage.*
+
+
+# Use 3 full calendar years (2023-2025), Weeks 1-52
+full_yrs = piv_wk[(piv_wk["year"].isin([2023, 2024, 2025])) & (piv_wk["iso_week"] <= 52)].copy()
+season = full_yrs.groupby("iso_week")[all_cols].mean().reset_index()
+
+for col in all_cols:
+    season[f"{col}_sidx"] = season[col] / season[col].mean()
+
+fig, axes = plt.subplots(1, 2, figsize=(16, 5), sharey=True)
+
+# Left Chart: Benchmarks + Ultra Sheer vs Beach Defense
+for col in main_cols:
+    c, ls, lw = palette[col]
+    axes[0].plot(season["iso_week"], season[f"{col}_sidx"], label=col, color=c, linestyle=ls, linewidth=lw+0.2)
+axes[0].axhline(1.0, color="gray", linestyle=":", linewidth=1)
+axes[0].axvspan(18, 35, color="gold", alpha=0.12, label="Peak Summer (May–Aug)")
+axes[0].set_xticks(range(1, 53, 4))
+axes[0].set_title("Seasonality Curve: Total Sun vs. NTG vs. Ultra Sheer vs. Beach Defense", fontweight="bold")
+axes[0].set_xlabel("Week of Year (1 = Jan, 26 = Late Jun, 52 = Dec)")
+axes[0].set_ylabel("Seasonality Index (1.0 = Avg Week)")
+axes[0].legend()
+axes[0].grid(True, alpha=0.3)
+
+# Right Chart: Top 4 NTG Platforms
+plat_palette = {
+    "Ultra Sheer":   ("#54A24B", "-", 2.3),
+    "Beach Defense": ("#F58518", "--", 2.3),
+    "Clear Face":    ("#E45756", "-.", 2.0),
+    "Sport":         ("#B279A2", ":", 2.2),
+}
+for col in plat_cols:
+    c, ls, lw = plat_palette[col]
+    axes[1].plot(season["iso_week"], season[f"{col}_sidx"], label=col, color=c, linestyle=ls, linewidth=lw)
+axes[1].axhline(1.0, color="gray", linestyle=":", linewidth=1)
+axes[1].axvspan(18, 35, color="gold", alpha=0.12, label="Peak Summer (May–Aug)")
+axes[1].set_xticks(range(1, 53, 4))
+axes[1].set_title("Seasonality Curve: Top 4 Neutrogena Platforms", fontweight="bold")
+axes[1].set_xlabel("Week of Year (1 = Jan, 26 = Late Jun, 52 = Dec)")
+axes[1].legend()
+axes[1].grid(True, alpha=0.3)
+
+plt.tight_layout()
+plt.show()
+
+# Season Share Breakdown Table (Peak vs Shoulder vs Off-Season)
+def season_bucket(w):
+    if 18 <= w <= 35:
+        return "1. Peak Summer (May–Aug, Wks 18–35)"
+    elif (10 <= w <= 17) or (36 <= w <= 43):
+        return "2. Shoulder (Mar–Apr & Sep–Oct)"
+    else:
+        return "3. Off-Season (Nov–Feb)"
+
+full_yrs["Season"] = full_yrs["iso_week"].apply(season_bucket)
+b_tbl = full_yrs.groupby("Season")[all_cols].sum()
+b_pct = (b_tbl / b_tbl.sum() * 100).round(1).sort_index()
+print("% of Annual Sales by Season (2023–2025 Average):")
+display(b_pct.reset_index())
+
+# Peak-to-Trough Summary Table
+pt_rows = []
+for col in all_cols:
+    max_val = season[f"{col}_sidx"].max()
+    min_val = season[f"{col}_sidx"].min()
+    peak_wk = int(season.loc[season[f"{col}_sidx"].idxmax(), "iso_week"])
+    trough_wk = int(season.loc[season[f"{col}_sidx"].idxmin(), "iso_week"])
+    pt_rows.append({
+        "Product": col,
+        "Peak Week": peak_wk,
+        "Peak Index (x Avg)": round(max_val, 2),
+        "Lowest Week": trough_wk,
+        "Lowest Index (x Avg)": round(min_val, 2),
+        "Peak-to-Trough Ratio": f"{max_val / min_val:.1f}x",
+    })
+display(pd.DataFrame(pt_rows))
+
+
+````````````````````````````````````````````
+
+Pair 3: How Ultra Sheer vs. Beach Defense Shift Inside NTG Across the Year + Takeaways
+
+%md
+### Step 2.3 — Seasonal Mix Shift Inside Neutrogena (Winter vs. Summer Share)
+**Why this chart matters:**
+Instead of looking at each product alone, this chart shows **what % of Neutrogena Sun sales comes from Ultra Sheer vs. Beach Defense during every week of the year**:
+- If **Ultra Sheer** is truly an *"everyday"* product, its share inside Neutrogena should be **highest in Fall/Winter** (when beachgoers stop buying Beach Defense, but daily users still buy Ultra Sheer).
+- Conversely, **Beach Defense's** share inside Neutrogena should **surge during May–August**.
+
+# Weekly share inside Total NTG Sun (2023-2025 average by iso_week)
+for col in plat_cols:
+    season[f"{col}_ntg_share"] = season[col] / season["Total NTG Sun"] * 100
+
+fig, ax = plt.subplots(figsize=(14, 5))
+for col in plat_cols:
+    c, ls, lw = plat_palette[col]
+    ax.plot(season["iso_week"], season[f"{col}_ntg_share"], label=f"{col} % of NTG", color=c, linestyle=ls, linewidth=lw)
+
+ax.axvspan(18, 35, color="gold", alpha=0.12, label="Peak Summer (May–Aug)")
+ax.set_xticks(range(1, 53, 4))
+ax.set_ylim(0, 62)
+ax.set_title("Share Inside Total NTG Sun by Week of Year (2023–2025 Avg)", fontweight="bold", fontsize=13)
+ax.set_xlabel("Week of Year (1 = Jan, 26 = Late Jun, 52 = Dec)")
+ax.set_ylabel("Share of NTG Sun Sales (%)")
+ax.legend(ncol=3)
+ax.grid(True, alpha=0.3)
+plt.tight_layout()
+plt.show()
+
+# Print Automated Key Takeaways for Task 2
+us_off = b_pct.loc["3. Off-Season (Nov–Feb)", "Ultra Sheer"]
+bd_off = b_pct.loc["3. Off-Season (Nov–Feb)", "Beach Defense"]
+us_pk  = b_pct.loc["1. Peak Summer (May–Aug, Wks 18–35)", "Ultra Sheer"]
+bd_pk  = b_pct.loc["1. Peak Summer (May–Aug, Wks 18–35)", "Beach Defense"]
+
+us_pt = season["Ultra Sheer_sidx"].max() / season["Ultra Sheer_sidx"].min()
+bd_pt = season["Beach Defense_sidx"].max() / season["Beach Defense_sidx"].min()
+ntg_pt = season["Total NTG Sun_sidx"].max() / season["Total NTG Sun_sidx"].min()
+
+us_bd_corr = piv_wk["Ultra Sheer"].corr(piv_wk["Beach Defense"])
+us_ntg_corr = piv_wk["Ultra Sheer"].corr(piv_wk["Total NTG Sun"])
+
+print("=" * 75)
+print("EXECUTIVE TAKEAWAYS — TASK 2 (SEASONALITY & EVERYDAY VS. SEASONAL)")
+print("=" * 75)
+print(f"1. OFF-SEASON ('EVERYDAY' CHECK): In Nov–Feb, Ultra Sheer gets {us_off}% of its")
+print(f"   annual sales vs. Beach Defense at {bd_off}%. In May–Aug Peak, Ultra Sheer gets")
+print(f"   {us_pk}% vs. Beach Defense at {bd_pk}%.")
+print(f"2. PEAK-TO-TROUGH SWING: Beach Defense swings {bd_pt:.1f}x from winter low to summer")
+print(f"   peak, compared to Ultra Sheer at {us_pt:.1f}x (Total NTG Sun = {ntg_pt:.1f}x).")
+print(f"3. WEEKLY CORRELATION: Ultra Sheer & Total NTG correlate at {us_ntg_corr:.4f};")
+print(f"   Ultra Sheer & Beach Defense correlate at {us_bd_corr:.4f} nationally.")
+print("=" * 75)
+
+````````````````````````````````
