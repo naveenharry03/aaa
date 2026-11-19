@@ -2011,3 +2011,159 @@ fig_bar.update_layout(
     margin=dict(l=60, r=30, t=95, b=80),
 )
 fig_bar.show()
+
+
+``````````````````````````
+
+from pyspark.sql import functions as F
+import pandas as pd
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
+
+TABLE = "`kvai-pro110033`.dev.circana_instore_ntg_aveeno_sun_protection_processed_20261117"
+
+PMAP = {
+    "NEUTROGENA ULTRA SHEER SUN PRTCTN": "Ultra Sheer",
+    "NEUTROGENA BEACH DEFENSE SUN PRTCTN": "Beach Defense",
+}
+
+yr5_pdf = (
+    spark.table(TABLE)
+    .withColumn("Product", F.trim("Product"))
+    .filter(F.col("Product").isin(list(PMAP.keys())))
+    .groupBy("year", "week_end", "Product")
+    .agg(F.sum("dollar_sales").cast("long").alias("dollar_sales"))
+    .withColumn("cal_week", F.least((((F.dayofyear("week_end") - 1) / 7).cast("int") + 1), F.lit(52)))
+    .withColumn("month", F.month("week_end"))
+    .toPandas()
+)
+yr5_pdf["series"] = yr5_pdf["Product"].map(PMAP)
+
+years_list = sorted(yr5_pdf["year"].unique())
+yr_colors = {
+    2022: "#9ECAE1",
+    2023: "#4C78A8",
+    2024: "#F58518",
+    2025: "#54A24B",
+    2026: "#E45756",
+}
+
+# ------------------------------------------------------------------
+# CHART A: All 5 Years Weekly Overlay (Weeks 1-52) with US Holidays
+# ------------------------------------------------------------------
+wk_yr = yr5_pdf.groupby(["year", "cal_week", "series"], as_index=False)["dollar_sales"].mean()
+
+fig_wk = make_subplots(
+    rows=1, cols=2, shared_yaxes=True, horizontal_spacing=0.06,
+    subplot_titles=("<b>Ultra Sheer ('Everyday') — All 5 Years</b>",
+                    "<b>Beach Defense ('Seasonal') — All 5 Years</b>"),
+)
+
+# Move subplot titles cleanly up so holiday labels sit comfortably below them
+for ann in fig_wk.layout.annotations:
+    ann.update(y=1.10)
+
+for col_idx, prod in enumerate(["Ultra Sheer", "Beach Defense"], start=1):
+    sub = wk_yr[wk_yr["series"] == prod]
+    for y in years_list:
+        s = sub[sub["year"] == y].sort_values("cal_week")
+        lbl = f"{y} (to Nov 8)" if y == 2026 else str(y)
+        fig_wk.add_trace(
+            go.Scatter(
+                x=s["cal_week"],
+                y=s["dollar_sales"] / 1e6,
+                name=lbl,
+                legendgroup=str(y),
+                showlegend=(col_idx == 1),
+                mode="lines",
+                line=dict(color=yr_colors[y], width=(2.6 if y == 2026 else 1.8)),
+                customdata=s["dollar_sales"],
+                hovertemplate=f"{y}: $%{{y:.2f}}M ($%{{customdata:,.0f}})<extra></extra>",
+            ),
+            row=1, col=col_idx
+        )
+
+    # Staggered US Holiday markers cleanly below subplot titles
+    holidays_24 = [
+        (21.5, 21.1, "right", "Memorial Day", "#C084FC"),
+        (26.5, 26.9, "left",  "July 4th",     "#F87171"),
+        (35.0, 35.4, "left",  "Labor Day",    "#FBBF24"),
+    ]
+    for wk_line, wk_txt, xanch, h_lbl, h_col in holidays_24:
+        fig_wk.add_vline(x=wk_line, line_dash="dash", line_color=h_col, line_width=1.1, opacity=0.65, row=1, col=col_idx)
+        fig_wk.add_annotation(
+            x=wk_txt, y=1.01, yref="paper", xref=("x" if col_idx == 1 else "x2"),
+            text=f"<b>{h_lbl}</b>", showarrow=False, xanchor=xanch,
+            font=dict(size=10, color=h_col), yanchor="bottom"
+        )
+
+    fig_wk.update_xaxes(
+        tickmode="array",
+        tickvals=[1, 9, 18, 26, 35, 44, 52],
+        ticktext=["Wk 1<br>Jan", "Wk 9<br>Mar", "Wk 18<br>May", "Wk 26<br>Late Jun", "Wk 35<br>Sep", "Wk 44<br>Nov", "Wk 52<br>Dec"],
+        row=1, col=col_idx
+    )
+
+fig_wk.update_layout(
+    template="plotly_dark",
+    height=510,
+    hovermode="x unified",
+    title=dict(
+        text="<b>Weekly Sales (USD Millions) Across All 5 Years (2022–2026) — Weeks 1 to 52</b><br>"
+             "<sup>Hover for exact weekly sales across all 5 years | Click legend years to filter</sup>",
+        x=0.5, xanchor="center", y=0.97
+    ),
+    yaxis_title="Weekly Sales (USD Millions)",
+    legend=dict(orientation="h", yanchor="top", y=-0.16, xanchor="center", x=0.5),
+    margin=dict(l=60, r=30, t=140, b=85),
+)
+fig_wk.show()
+
+# ------------------------------------------------------------------
+# CHART B: Monthly Bar Chart (Jan-Dec) Across All 5 Years
+# ------------------------------------------------------------------
+mo_yr = yr5_pdf.groupby(["year", "month", "series"], as_index=False)["dollar_sales"].mean()
+month_names = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+
+fig_bar = make_subplots(
+    rows=1, cols=2, shared_yaxes=True, horizontal_spacing=0.06,
+    subplot_titles=("<b>Ultra Sheer — Avg Weekly Sales by Month</b>",
+                    "<b>Beach Defense — Avg Weekly Sales by Month</b>"),
+)
+
+for col_idx, prod in enumerate(["Ultra Sheer", "Beach Defense"], start=1):
+    sub = mo_yr[mo_yr["series"] == prod]
+    for y in years_list:
+        s = sub[sub["year"] == y].set_index("month").reindex(range(1, 13))
+        lbl = f"{y} (Nov partial)" if y == 2026 else str(y)
+        vals_m = (s["dollar_sales"] / 1e6).fillna(0)
+        raw_d = s["dollar_sales"].fillna(0)
+        fig_bar.add_trace(
+            go.Bar(
+                x=month_names,
+                y=vals_m,
+                name=lbl,
+                legendgroup=str(y),
+                showlegend=(col_idx == 1),
+                marker_color=yr_colors[y],
+                customdata=raw_d,
+                hovertemplate=f"{y}: $%{{y:.2f}}M/wk ($%{{customdata:,.0f}})<extra></extra>",
+            ),
+            row=1, col=col_idx
+        )
+
+fig_bar.update_layout(
+    template="plotly_dark",
+    barmode="group",
+    height=460,
+    hovermode="x unified",
+    title=dict(
+        text="<b>Monthly Avg Weekly Sales (USD Millions / Week) — All 5 Years (2022–2026)</b><br>"
+             "<sup>Compares all 12 months fairly (4-wk vs 5-wk months) | 2026 ends Nov 8</sup>",
+        x=0.5, xanchor="center", y=0.97
+    ),
+    yaxis_title="Avg Weekly Sales (USD Millions / Week)",
+    legend=dict(orientation="h", yanchor="top", y=-0.15, xanchor="center", x=0.5),
+    margin=dict(l=60, r=30, t=105, b=80),
+)
+fig_bar.show()
