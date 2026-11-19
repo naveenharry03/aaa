@@ -1595,3 +1595,159 @@ fig.show()
 print("National Weekly Correlation Matrix (253 Weeks):")
 display(piv_wk[all_cols].corr().round(4))
 
+
+`````````````
+
+%md
+### Step 2.2 — Week 1 to Week 52 Seasonality Curve: Proving "Everyday" Ultra Sheer vs. "Seasonal" Beach Defense
+**Why we use `2023–2025` (3 complete years) for this 52-week average:**
+- `2022` is missing Week 1, and `2026` stops on Nov 8 (missing Weeks 46–52).
+- Averaging the **3 complete calendar years (`2023, 2024, 2025`)** gives a clean, unbiased 52-week pattern without a fake drop-off in Nov–Dec. *(We will view all 5 individual years separately in Step 2.4.)*
+
+**How to read the Seasonality Index (`1.0x = Average Week of the Year`):**
+- `1.0x` (dotted line) = a normal average week for that product.
+- `3.7x` = selling **3.7 times** a normal week's sales!
+- **Hover over any week** to see the **Multiplier (`x avg`)**, **Avg Weekly Dollars (`$M`)**, and **`% of Annual Sales`**.
+
+**What this proves for Yue:**
+1. **Beach Defense is extreme summer-only (`24.3×` swing):** Jumps to **`~3.7×`** at July 4th and drops to **`~0.15×`** in winter (`71%` of annual sales happen in May–Aug, only `7.5%` in Nov–Feb).
+2. **Ultra Sheer is steadier & more "everyday" (`~9×` swing):** Almost **2× higher winter share** (`13%` in Nov–Feb vs. `7.5%` for Beach Defense) and higher Spring/Fall shoulder share (`26%`).
+3. **US Holiday Spikes clearly visible:** Early Spring Break bump (`~Wk 15–16`), **Memorial Day** kick-off (`~Wk 21`), **July 4th Peak** (`Wk 26` = #1 week of the year), and **Labor Day** wind-down (`~Wk 35`).
+
+import pandas as pd
+import plotly.graph_objects as go
+
+# Detect which product columns exist in piv_wk (works whether 4 or 6 products are loaded)
+candidate_cols = ["Total Sun Category", "Total NTG Sun", "Ultra Sheer", "Beach Defense", "Clear Face", "Sport"]
+avail_cols = [c for c in candidate_cols if c in piv_wk.columns]
+
+# Use 3 complete calendar years (2023-2025) and map each week cleanly to Weeks 1-52
+full_yrs = piv_wk[piv_wk["year"].isin([2023, 2024, 2025])].copy()
+full_yrs["cal_week"] = (((full_yrs["week_end"].dt.dayofyear - 1) // 7) + 1).clip(upper=52)
+
+season = full_yrs.groupby("cal_week")[avail_cols].mean().reset_index()
+
+# Friendly hover label with approximate date (e.g. "Wk 26 (~Jun 25)")
+season["wk_label"] = season["cal_week"].apply(
+    lambda w: f"Wk {int(w)} (~{(pd.Timestamp('2025-01-01') + pd.to_timedelta((int(w)-1)*7, unit='D')).strftime('%b %d')})"
+)
+
+for col in avail_cols:
+    season[f"{col}_sidx"]   = season[col] / season[col].mean()
+    season[f"{col}_pct_yr"] = season[col] / season[col].sum() * 100
+
+trace_cfg_22 = {
+    "Total Sun Category": dict(color="#72A8D8", dash="solid",   width=2.2, visible=True),
+    "Total NTG Sun":      dict(color="#8C8C8C", dash="dot",     width=2.4, visible=True),
+    "Ultra Sheer":        dict(color="#54A24B", dash="solid",   width=2.8, visible=True),
+    "Beach Defense":      dict(color="#F58518", dash="dash",    width=2.8, visible=True),
+    "Clear Face":         dict(color="#E45756", dash="dashdot", width=2.0, visible="legendonly"),
+    "Sport":              dict(color="#B279A2", dash="dot",     width=2.2, visible="legendonly"),
+}
+
+fig = go.Figure()
+
+# Shaded Peak Summer band (May-Aug: Weeks 18-35)
+fig.add_vrect(
+    x0=18, x1=35,
+    fillcolor="rgba(255, 215, 0, 0.12)",
+    layer="below", line_width=0,
+    annotation_text="Peak Summer (May–Aug)",
+    annotation_position="top left",
+    annotation_font=dict(size=11, color="#B8860B"),
+)
+
+for col in avail_cols:
+    cfg = trace_cfg_22[col]
+    custom_arr = list(zip(season[col] / 1e6, season[f"{col}_pct_yr"]))
+    fig.add_trace(
+        go.Scatter(
+            x=season["cal_week"],
+            y=season[f"{col}_sidx"],
+            name=col,
+            mode="lines",
+            visible=cfg["visible"],
+            line=dict(color=cfg["color"], dash=cfg["dash"], width=cfg["width"]),
+            customdata=custom_arr,
+            text=season["wk_label"],
+            hovertemplate="%{y:.2f}x avg  |  $%{customdata[0]:.2f}M/wk  |  %{customdata[1]:.1f}% of yr<extra></extra>",
+        )
+    )
+
+# Baseline 1.0x reference line
+fig.add_hline(
+    y=1.0, line_dash="dot", line_color="gray", line_width=1.2,
+    annotation_text="Annual Avg Week (1.0x)", annotation_position="bottom right"
+)
+
+# US Holiday Markers
+holidays = [
+    (15.5, "Spring Break", "teal"),
+    (21.5, "Memorial Day", "purple"),
+    (26.0, "July 4th Peak", "crimson"),
+    (35.0, "Labor Day", "saddlebrown"),
+]
+for wk_pos, label, hcol in holidays:
+    fig.add_vline(x=wk_pos, line_dash="dash", line_color=hcol, line_width=1.2, opacity=0.65)
+    fig.add_annotation(
+        x=wk_pos, y=1.02, yref="paper", text=f"<b>{label}</b>",
+        showarrow=False, font=dict(size=10, color=hcol), yanchor="bottom"
+    )
+
+fig.update_layout(
+    template="plotly_white",
+    height=520,
+    hovermode="x unified",
+    title=dict(
+        text="<b>Seasonality Curve (Weeks 1–52, 2023–2025 Avg): Everyday vs. Seasonal Sun</b><br>"
+             "<sup>Hover for Multiplier (x avg), Avg Weekly $M & % of Annual Sales</sup>",
+        x=0.5, xanchor="center", y=0.97,
+    ),
+    yaxis_title="Seasonality Index (1.0 = Avg Week)",
+    xaxis=dict(
+        title="Week of Year (1 = Early Jan, 26 = Late Jun, 52 = Late Dec)",
+        tickmode="array",
+        tickvals=[1, 5, 9, 14, 18, 22, 26, 31, 35, 40, 44, 48, 52],
+        ticktext=["Wk 1<br>Jan", "Wk 5<br>Feb", "Wk 9<br>Mar", "Wk 14<br>Apr", "Wk 18<br>May",
+                  "Wk 22<br>Jun", "Wk 26<br>Late Jun", "Wk 31<br>Aug", "Wk 35<br>Sep",
+                  "Wk 40<br>Oct", "Wk 44<br>Nov", "Wk 48<br>Dec", "Wk 52<br>End Dec"],
+    ),
+    legend=dict(orientation="h", yanchor="top", y=-0.18, xanchor="center", x=0.5),
+    margin=dict(l=60, r=30, t=110, b=90),
+)
+
+fig.show()
+
+# Summary Table 1: % of Annual Sales by Season
+def season_bucket(w):
+    if 18 <= w <= 35:
+        return "1. Peak Summer (May–Aug, Wks 18–35)"
+    elif (10 <= w <= 17) or (36 <= w <= 43):
+        return "2. Shoulder (Mar–Apr & Sep–Oct)"
+    else:
+        return "3. Off-Season (Nov–Feb)"
+
+full_yrs["Season"] = full_yrs["cal_week"].apply(season_bucket)
+b_tbl = full_yrs.groupby("Season")[avail_cols].sum()
+b_pct = (b_tbl / b_tbl.sum() * 100).round(1).sort_index()
+print("% of Annual Sales by Season (2023–2025 Average):")
+display(b_pct.reset_index())
+
+# Summary Table 2: Peak-to-Trough Swing
+pt_rows = []
+for col in avail_cols:
+    max_val = season[f"{col}_sidx"].max()
+    min_val = season[f"{col}_sidx"].min()
+    peak_wk = int(season.loc[season[f"{col}_sidx"].idxmax(), "cal_week"])
+    trough_wk = int(season.loc[season[f"{col}_sidx"].idxmin(), "cal_week"])
+    pt_rows.append({
+        "Product": col,
+        "Peak Week": f"Wk {peak_wk}",
+        "Peak Index (x Avg)": round(max_val, 2),
+        "Lowest Week": f"Wk {trough_wk}",
+        "Lowest Index (x Avg)": round(min_val, 2),
+        "Peak-to-Trough Swing": f"{max_val / min_val:.1f}x",
+    })
+print("Peak-to-Trough Swing (Higher = More Extreme Summer Seasonality):")
+display(pd.DataFrame(pt_rows))
+
