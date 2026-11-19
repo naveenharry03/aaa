@@ -2167,3 +2167,194 @@ fig_bar.update_layout(
     margin=dict(l=60, r=30, t=105, b=80),
 )
 fig_bar.show()
+
+``````````````````````````````````````````````````````````````
+
+%md
+## Task 3: Geo / DMA-Level EDA (Ultra Sheer vs. Beach Defense Across 196 Markets)
+
+### Step 3.1 — Where Is the Money? DMA Concentration (80/20 Rule) & Top 15 Markets
+**What we are doing & how it is calculated:**
+- We roll up all **253 weeks (2022–2026)** by each of the **196 US DMAs (cities)** for `Total Sun`, `Total NTG Sun`, `Ultra Sheer`, and `Beach Defense`.
+- **Chart 1 (Pareto / Cumulative Curve):** Ranks all 196 DMAs from `#1 Biggest City` to `#196 Smallest City` and adds up their % of total US sales (`Cumulative %`).
+- **Tier Table:** Splits the 196 DMAs into 4 simple size buckets (**Top 20 Mega**, **21–50 Large**, **51–100 Mid**, **101–196 Small**) to show how much revenue and weekly dollar volume each bucket carries.
+- **Chart 2 (Top 15 Cities Side-by-Side):** Compares **Ultra Sheer** vs. **Beach Defense** dollar sales inside the 15 largest Neutrogena markets. *(Hover over any city bar to see total dollars, avg weekly dollars, and its share inside that city.)*
+
+**Why we do this for 2027 Geo Optimization:**
+1. **Focus media dollars:** In Geo Optimization, not all 196 DMAs matter equally—we need to know whether **20–50 top DMAs drive most of the business**, and whether tiny DMAs (`101–196`) have too few weekly sales (`< $1,000/wk`) and too much noise to model cleanly.
+2. **Spot early Ultra Sheer vs. Beach Defense city differences:** See right away if Beach Defense jumps unusually high in warm/coastal hubs (like Miami, Tampa, Orlando, LA) compared to Ultra Sheer.
+
+
+from pyspark.sql import functions as F
+import pandas as pd
+import plotly.graph_objects as go
+
+TABLE = "`kvai-pro110033`.dev.circana_instore_ntg_aveeno_sun_protection_processed_20261117"
+
+PMAP_3 = {
+    "SUN PROTECTION": "Total Sun",
+    "NEUTROGENA SUN PRTCTN": "Total NTG Sun",
+    "NEUTROGENA ULTRA SHEER SUN PRTCTN": "Ultra Sheer",
+    "NEUTROGENA BEACH DEFENSE SUN PRTCTN": "Beach Defense",
+}
+
+# 1. Aggregate cleanly to (Week × DMA × Product), then to (DMA × Product)
+dma_prod = (
+    spark.table(TABLE)
+    .withColumn("Product", F.trim("Product"))
+    .filter(F.col("Product").isin(list(PMAP_3.keys())))
+    .groupBy("week_end", "dma_id", "Geography", "Product")
+    .agg(F.sum("dollar_sales").cast("long").alias("dollar_sales"))
+    .groupBy("dma_id", "Geography", "Product")
+    .agg(
+        F.sum("dollar_sales").cast("long").alias("total_sales"),
+        F.avg("dollar_sales").alias("avg_weekly_sales"),
+        F.sum(F.when(F.col("dollar_sales") == 0, 1).otherwise(0)).alias("zero_weeks"),
+    )
+    .toPandas()
+)
+dma_prod["series"] = dma_prod["Product"].map(PMAP_3)
+
+# Pivot to 1 row per DMA (196 rows)
+dma_df = dma_prod.pivot(index=["dma_id", "Geography"], columns="series", values="total_sales").reset_index()
+dma_avg = dma_prod.pivot(index=["dma_id", "Geography"], columns="series", values="avg_weekly_sales").reset_index()
+dma_avg = dma_avg.rename(columns={c: f"{c}_avg_wk" for c in ["Total Sun", "Total NTG Sun", "Ultra Sheer", "Beach Defense"]})
+
+dma_df = dma_df.merge(dma_avg, on=["dma_id", "Geography"]).sort_values("Total NTG Sun", ascending=False).reset_index(drop=True)
+dma_df["ntg_rank"] = dma_df.index + 1
+
+# ------------------------------------------------------------------
+# CHART 1: Pareto / Cumulative % Curve Across All 196 DMAs
+# ------------------------------------------------------------------
+fig_pareto = go.Figure()
+pareto_cfg = {
+    "Total NTG Sun": dict(color="#7F7F7F", dash="dot",   width=2.5),
+    "Ultra Sheer":   dict(color="#54A24B", dash="solid", width=2.8),
+    "Beach Defense": dict(color="#F58518", dash="dash",  width=2.8),
+}
+
+milestones = []
+for col, cfg in pareto_cfg.items():
+    s = dma_df[["Geography", col]].sort_values(col, ascending=False).reset_index(drop=True)
+    s["rank"] = s.index + 1
+    s["cum_pct"] = s[col].cumsum() / s[col].sum() * 100
+
+    # Record how many DMAs reach 50% and 80% of US sales
+    d50 = int(s[s["cum_pct"] >= 50].iloc[0]["rank"])
+    d80 = int(s[s["cum_pct"] >= 80].iloc[0]["rank"])
+    d90 = int(s[s["cum_pct"] >= 90].iloc[0]["rank"])
+    milestones.append({"Product": col, "DMAs for 50% Sales": d50, "DMAs for 80% Sales": d80, "DMAs for 90% Sales": d90})
+
+    fig_pareto.add_trace(
+        go.Scatter(
+            x=s["rank"],
+            y=s["cum_pct"],
+            name=f"{col} (80% in Top {d80} DMAs)",
+            mode="lines",
+            line=dict(color=cfg["color"], dash=cfg["dash"], width=cfg["width"]),
+            customdata=list(zip(s["Geography"], s[col] / 1e6)),
+            hovertemplate="Rank #%{x}: %{customdata[0]}  |  $%{customdata[1]:.2f}M  |  Cum: %{y:.1f}%<extra></extra>",
+        )
+    )
+
+for pct_line, lbl in [(50, "50% of US Sales"), (80, "80% of US Sales")]:
+    fig_pareto.add_hline(y=pct_line, line_dash="dot", line_color="gray", line_width=1.1,
+                         annotation_text=lbl, annotation_position="bottom right")
+
+fig_pareto.update_layout(
+    template="plotly_white",
+    height=460,
+    hovermode="x unified",
+    title=dict(
+        text="<b>Market Concentration (80/20 Rule): How Many of the 196 DMAs Drive Sales?</b><br>"
+             "<sup>Hover over any rank to see the city, its 5-year sales, and cumulative %</sup>",
+        x=0.5, xanchor="center"
+    ),
+    xaxis=dict(title="DMA Rank (1 = Biggest Market, 196 = Smallest Market)", dtick=20),
+    yaxis=dict(title="Cumulative % of US Sales", range=[0, 103]),
+    legend=dict(orientation="h", yanchor="top", y=-0.16, xanchor="center", x=0.5),
+    margin=dict(l=60, r=30, t=90, b=80),
+)
+fig_pareto.show()
+
+print("80/20 Concentration Summary (out of 196 DMAs):")
+display(pd.DataFrame(milestones))
+
+# ------------------------------------------------------------------
+# TABLE: 4 Simple DMA Size Tiers (Why Small DMAs May Be Too Noisy)
+# ------------------------------------------------------------------
+def size_tier(r):
+    if r <= 20:   return "1. Top 20 Mega DMAs (Rank 1–20)"
+    elif r <= 50: return "2. Large DMAs (Rank 21–50)"
+    elif r <= 100:return "3. Mid DMAs (Rank 51–100)"
+    else:         return "4. Small DMAs (Rank 101–196)"
+
+dma_df["DMA Tier"] = dma_df["ntg_rank"].apply(size_tier)
+tier_tbl = dma_df.groupby("DMA Tier").agg(
+    DMA_Count=("dma_id", "count"),
+    ntg_sum=("Total NTG Sun", "sum"),
+    us_sum=("Ultra Sheer", "sum"),
+    bd_sum=("Beach Defense", "sum"),
+    us_avg_wk_per_dma=("Ultra Sheer_avg_wk", "mean"),
+    bd_avg_wk_per_dma=("Beach Defense_avg_wk", "mean"),
+).reset_index()
+
+tier_tbl["NTG Share (%)"] = (tier_tbl["ntg_sum"] / tier_tbl["ntg_sum"].sum() * 100).round(1)
+tier_tbl["Ultra Sheer Share (%)"] = (tier_tbl["us_sum"] / tier_tbl["us_sum"].sum() * 100).round(1)
+tier_tbl["Beach Defense Share (%)"] = (tier_tbl["bd_sum"] / tier_tbl["bd_sum"].sum() * 100).round(1)
+tier_tbl["Ultra Sheer Avg $/Wk per DMA"] = tier_tbl["us_avg_wk_per_dma"].round(0).astype(int)
+tier_tbl["Beach Defense Avg $/Wk per DMA"] = tier_tbl["bd_avg_wk_per_dma"].round(0).astype(int)
+
+print("DMA Size Tier Breakdown (Based on NTG Sun Rank):")
+display(tier_tbl[[
+    "DMA Tier", "DMA_Count", "NTG Share (%)", "Ultra Sheer Share (%)", "Beach Defense Share (%)",
+    "Ultra Sheer Avg $/Wk per DMA", "Beach Defense Avg $/Wk per DMA"
+]])
+
+# ------------------------------------------------------------------
+# CHART 2: Top 15 DMAs — Ultra Sheer vs. Beach Defense Side-by-Side
+# ------------------------------------------------------------------
+top15 = dma_df.head(15).copy()
+top15["us_share_of_ntg"] = top15["Ultra Sheer"] / top15["Total NTG Sun"] * 100
+top15["bd_share_of_ntg"] = top15["Beach Defense"] / top15["Total NTG Sun"] * 100
+
+fig_top15 = go.Figure()
+fig_top15.add_trace(
+    go.Bar(
+        y=top15["Geography"],
+        x=top15["Ultra Sheer"] / 1e6,
+        name="Ultra Sheer (Everyday)",
+        orientation="h",
+        marker_color="#54A24B",
+        customdata=list(zip(top15["Ultra Sheer_avg_wk"], top15["us_share_of_ntg"])),
+        hovertemplate="$%{x:.1f}M total  |  $%{customdata[0]:,.0f}/wk  |  %{customdata[1]:.1f}% of city NTG<extra></extra>",
+    )
+)
+fig_top15.add_trace(
+    go.Bar(
+        y=top15["Geography"],
+        x=top15["Beach Defense"] / 1e6,
+        name="Beach Defense (Seasonal)",
+        orientation="h",
+        marker_color="#F58518",
+        customdata=list(zip(top15["Beach Defense_avg_wk"], top15["bd_share_of_ntg"])),
+        hovertemplate="$%{x:.1f}M total  |  $%{customdata[0]:,.0f}/wk  |  %{customdata[1]:.1f}% of city NTG<extra></extra>",
+    )
+)
+
+fig_top15.update_layout(
+    template="plotly_white",
+    barmode="group",
+    height=580,
+    hovermode="y unified",
+    title=dict(
+        text="<b>Top 15 US DMAs (by Total NTG Sun): Ultra Sheer vs. Beach Defense</b><br>"
+             "<sup>Hover over any city to compare 5-Yr Total USD Millions, Avg Weekly Dollars & Share inside that city</sup>",
+        x=0.5, xanchor="center"
+    ),
+    xaxis_title="5-Year Total Sales (USD Millions, 2022–2026)",
+    yaxis=dict(autorange="reversed", title=""),
+    legend=dict(orientation="h", yanchor="top", y=1.06, xanchor="center", x=0.5),
+    margin=dict(l=150, r=40, t=110, b=50),
+)
+fig_top15.show()
