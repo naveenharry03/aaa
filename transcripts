@@ -1751,3 +1751,105 @@ for col in avail_cols:
 print("Peak-to-Trough Swing (Higher = More Extreme Summer Seasonality):")
 display(pd.DataFrame(pt_rows))
 
+````````````````````````````````````````````````
+
+%md
+### Step 2.3 — Inside Neutrogena: How Product Mix Shifts Between Winter & Summer
+**What this chart shows (in simple terms):**
+Out of every **$100 Neutrogena Sun makes in a week**, how many dollars come from **Ultra Sheer** vs. **Beach Defense**?
+
+**How to read it:**
+- **In Winter (Weeks 1–13 & 41–52):** Ultra Sheer carries the Neutrogena brand (**~44%–46%** of all NTG Sun sales), while Beach Defense drops to only **~15%–18%**.
+- **In Peak Summer (July 4th, Weeks 26–27):** Beach Defense **doubles its share inside NTG (`~15% → ~36%`)** and nearly catches up to Ultra Sheer (**~37%**)!
+- *(Click `Clear Face` or `Sport` in the legend to see their share shift too—notice Clear Face actually holds a higher % of NTG in Spring/Winter and dips in mid-summer.)*
+
+
+import plotly.graph_objects as go
+
+plat_candidates = ["Ultra Sheer", "Beach Defense", "Clear Face", "Sport"]
+plat_avail = [c for c in plat_candidates if c in season.columns]
+
+for col in plat_avail:
+    season[f"{col}_ntg_share"] = season[col] / season["Total NTG Sun"] * 100
+
+plat_cfg_23 = {
+    "Ultra Sheer":   dict(color="#54A24B", dash="solid",   width=2.8, visible=True),
+    "Beach Defense": dict(color="#F58518", dash="dash",    width=2.8, visible=True),
+    "Clear Face":    dict(color="#E45756", dash="dashdot", width=2.0, visible="legendonly"),
+    "Sport":         dict(color="#B279A2", dash="dot",     width=2.2, visible="legendonly"),
+}
+
+fig = go.Figure()
+
+# Peak Summer shading (Weeks 18-35)
+fig.add_vrect(
+    x0=18, x1=35,
+    fillcolor="rgba(255, 215, 0, 0.12)",
+    layer="below", line_width=0,
+    annotation_text="Peak Summer (May–Aug)",
+    annotation_position="top left",
+    annotation_font=dict(size=11, color="#B8860B"),
+)
+
+for col in plat_avail:
+    cfg = plat_cfg_23[col]
+    fig.add_trace(
+        go.Scatter(
+            x=season["cal_week"],
+            y=season[f"{col}_ntg_share"],
+            name=f"{col} (% of NTG)",
+            mode="lines",
+            visible=cfg["visible"],
+            line=dict(color=cfg["color"], dash=cfg["dash"], width=cfg["width"]),
+            customdata=season[col] / 1e6,
+            hovertemplate="%{y:.1f}% of NTG  |  $%{customdata:.2f}M/wk<extra></extra>",
+        )
+    )
+
+# Holiday markers
+for wk_pos, label, hcol in [(21.5, "Memorial Day", "purple"), (26.5, "July 4th", "crimson"), (35.0, "Labor Day", "saddlebrown")]:
+    fig.add_vline(x=wk_pos, line_dash="dash", line_color=hcol, line_width=1.1, opacity=0.6)
+    fig.add_annotation(x=wk_pos, y=1.02, yref="paper", text=f"<b>{label}</b>",
+                       showarrow=False, font=dict(size=10, color=hcol), yanchor="bottom")
+
+fig.update_layout(
+    template="plotly_dark",
+    height=480,
+    hovermode="x unified",
+    title=dict(
+        text="<b>Product Mix Shift Inside NTG Sun Across the Year (2023–2025 Avg)</b><br>"
+             "<sup>Hover for % Share of NTG Sun & Avg Weekly $M | Click Clear Face / Sport in legend</sup>",
+        x=0.5, xanchor="center", y=0.97,
+    ),
+    yaxis=dict(title="Share of Total NTG Sun Sales (%)", range=[0, 55]),
+    xaxis=dict(
+        title="Week of Year (1 = Early Jan, 26 = Late Jun, 52 = Late Dec)",
+        tickmode="array",
+        tickvals=[1, 5, 9, 14, 18, 22, 26, 31, 35, 40, 44, 48, 52],
+        ticktext=["Wk 1<br>Jan", "Wk 5<br>Feb", "Wk 9<br>Mar", "Wk 14<br>Apr", "Wk 18<br>May",
+                  "Wk 22<br>Jun", "Wk 26<br>Late Jun", "Wk 31<br>Aug", "Wk 35<br>Sep",
+                  "Wk 40<br>Oct", "Wk 44<br>Nov", "Wk 48<br>Dec", "Wk 52<br>End Dec"],
+    ),
+    legend=dict(orientation="h", yanchor="top", y=-0.18, xanchor="center", x=0.5),
+    margin=dict(l=60, r=30, t=105, b=90),
+)
+
+fig.show()
+
+# Print Automated Takeaways for Step 2.2 + 2.3
+us_min_sh = season["Ultra Sheer_ntg_share"].min()
+us_max_sh = season["Ultra Sheer_ntg_share"].max()
+bd_min_sh = season["Beach Defense_ntg_share"].min()
+bd_max_sh = season["Beach Defense_ntg_share"].max()
+
+print("=" * 75)
+print("EXECUTIVE TAKEAWAYS — TASK 2 (SEASONALITY & MIX SHIFT)")
+print("=" * 75)
+print(f"1. BEACH DEFENSE IS ULTRA-SEASONAL (23.9x SWING): 71.5% of its sales happen")
+print(f"   in May–Aug and only 7.4% in Nov–Feb. Inside NTG, its share jumps from")
+print(f"   ~{bd_min_sh:.1f}% in winter to ~{bd_max_sh:.1f}% around July 4th.")
+print(f"2. ULTRA SHEER IS STEADIER / MORE 'EVERYDAY' (9.3x SWING): Gets 12.7% of")
+print(f"   sales in winter (almost 2x Beach Defense) and carries ~{us_max_sh:.1f}% of NTG")
+print(f"   in winter (dipping to ~{us_min_sh:.1f}% in peak July when Beach Defense surges).")
+print(f"3. BONUS — CLEAR FACE IS EVEN MORE 'EVERYDAY' (6.7x SWING): 16.1% winter share.")
+print("=" * 75)
