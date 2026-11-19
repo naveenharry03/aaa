@@ -1450,3 +1450,148 @@ print(f"   Ultra Sheer & Beach Defense correlate at {us_bd_corr:.4f} nationally.
 print("=" * 75)
 
 ````````````````````````````````
+
+%md
+## Task 2: Seasonality & Time Patterns ("Everyday" Ultra Sheer vs. "Seasonal" Beach Defense)
+
+### Step 2.1 — Full 5-Year Weekly Trend (2022–2026): How Big Are the Summer Spikes?
+**Why this chart uses a `100` Index instead of raw dollars:**
+- Total Sun (`~$38.9M/week`) is ~21× larger than Beach Defense (`~$1.8M/week`), so raw dollars would squash Beach Defense flat at the bottom.
+- Instead, we set **each product's own 5-year average week = `100`** (shown in the small reference table below and as the white dotted line on the chart):
+  - **Above `100`** = Busy season (e.g., `300` = **3×** a normal week)
+  - **Below `100`** = Slow season (e.g., `30` = **0.3×** a normal week)
+- **Hover over any week** to see both the **Index** and the **exact Dollar Sales**. *(Tip: Click `Clear Face` or `Sport` in the legend to toggle them on/off.)*
+
+**What we achieve & what to notice:**
+1. **Beach Defense (orange dashed)** spikes **much higher every summer** (`330–440` vs. Ultra Sheer's `230–270`), AND its summer peaks have grown taller from 2022 to 2026.
+2. **Beach Defense drops lower every winter** (`~15–20` vs. Ultra Sheer's `~25–35`), showing Ultra Sheer keeps stronger year-round ("everyday") demand.
+3. **Correlation Table (`1.00` = moves identically):** Ultra Sheer moves almost 1:1 with Total NTG Sun (`0.99+`), while Beach Defense differs slightly (`~0.95` vs. Ultra Sheer) because of its sharper mid-summer spikes.
+
+
+from pyspark.sql import functions as F
+import pandas as pd
+import plotly.graph_objects as go
+
+TABLE = "`kvai-pro110033`.dev.circana_instore_ntg_aveeno_sun_protection_processed_20261117"
+
+PRODUCT_MAP = {
+    "SUN PROTECTION": "Total Sun Category",
+    "NEUTROGENA SUN PRTCTN": "Total NTG Sun",
+    "NEUTROGENA ULTRA SHEER SUN PRTCTN": "Ultra Sheer",
+    "NEUTROGENA BEACH DEFENSE SUN PRTCTN": "Beach Defense",
+    "NEUTROGENA CLEAR FACE SUN PRTCTN": "Clear Face",
+    "NEUTROGENA SPORT SUN PRTCTN": "Sport",
+}
+
+# Load and safely aggregate to exact (Week × DMA × Product) grain
+df_t2 = (
+    spark.table(TABLE)
+    .withColumn("Product", F.trim("Product"))
+    .filter(F.col("Product").isin(list(PRODUCT_MAP.keys())))
+    .groupBy("year", "week_start", "week_end", "Product", "Geography", "dma_id")
+    .agg(F.sum("dollar_sales").cast("long").alias("dollar_sales"))
+    .withColumn("iso_week", F.weekofyear("week_end"))
+    .withColumn("month", F.month("week_end"))
+)
+
+# National weekly sales table in Pandas
+nat_wk = (
+    df_t2.groupBy("year", "week_end", "iso_week", "month", "Product")
+    .agg(F.sum("dollar_sales").cast("long").alias("dollar_sales"))
+    .toPandas()
+)
+nat_wk["week_end"] = pd.to_datetime(nat_wk["week_end"])
+nat_wk["series"] = nat_wk["Product"].map(PRODUCT_MAP)
+
+piv_wk = (
+    nat_wk.pivot(index=["year", "week_end", "iso_week", "month"], columns="series", values="dollar_sales")
+    .reset_index()
+    .sort_values("week_end")
+)
+
+main_cols = ["Total Sun Category", "Total NTG Sun", "Ultra Sheer", "Beach Defense"]
+plat_cols = ["Ultra Sheer", "Beach Defense", "Clear Face", "Sport"]
+all_cols  = ["Total Sun Category", "Total NTG Sun", "Ultra Sheer", "Beach Defense", "Clear Face", "Sport"]
+
+# 1. Small Reference Table: What does Index = 100 equal in real dollars?
+baseline_rows = []
+for col in all_cols:
+    avg_wk = piv_wk[col].mean()
+    baseline_rows.append({
+        "Product": col,
+        "5-Yr Avg Week (Index = 100)": f"${avg_wk:,.0f}",
+        "5-Yr Avg Week ($M)": round(avg_wk / 1e6, 2),
+    })
+print("Baseline Reference — What 'Index = 100' Equals for Each Product:")
+display(pd.DataFrame(baseline_rows))
+
+# 2. Interactive Plotly Chart (Dark Theme + Unified Hover Tooltip)
+trace_cfg = {
+    "Total Sun Category": dict(color="#72A8D8", dash="solid",   width=2.0, visible=True),
+    "Total NTG Sun":      dict(color="#B0B0B0", dash="dot",     width=2.2, visible=True),
+    "Ultra Sheer":        dict(color="#54A24B", dash="solid",   width=2.3, visible=True),
+    "Beach Defense":      dict(color="#F58518", dash="dash",    width=2.3, visible=True),
+    "Clear Face":         dict(color="#E45756", dash="dashdot", width=1.8, visible="legendonly"),
+    "Sport":              dict(color="#B279A2", dash="dot",     width=2.0, visible="legendonly"),
+}
+
+fig = go.Figure()
+
+for col in all_cols:
+    cfg = trace_cfg[col]
+    idx_vals = piv_wk[col] / piv_wk[col].mean() * 100
+    fig.add_trace(
+        go.Scatter(
+            x=piv_wk["week_end"],
+            y=idx_vals,
+            name=col,
+            mode="lines",
+            visible=cfg["visible"],
+            line=dict(color=cfg["color"], dash=cfg["dash"], width=cfg["width"]),
+            customdata=piv_wk[col],
+            hovertemplate="%{y:.1f}  |  $%{customdata:,.0f}<extra></extra>",
+        )
+    )
+
+# Horizontal reference line at Index = 100
+fig.add_hline(
+    y=100,
+    line_dash="dot",
+    line_color="rgba(255,255,255,0.65)",
+    line_width=1.2,
+    annotation_text="5-Yr Avg Week = 100",
+    annotation_position="bottom right",
+    annotation_font=dict(color="rgba(255,255,255,0.8)", size=11),
+)
+
+fig.update_layout(
+    template="plotly_dark",
+    height=480,
+    hovermode="x unified",
+    title=dict(
+        text="<b>5-Year Weekly Sales Trend (2022–2026) — Indexed (Average Week = 100)</b><br>"
+             "<sup>Hover for Index & exact $ sales | Click Clear Face / Sport in legend to toggle</sup>",
+        x=0.5,
+        xanchor="center",
+    ),
+    yaxis_title="Sales Index (100 = 5-Yr Avg Week)",
+    xaxis_title="",
+    legend=dict(
+        orientation="h",
+        yanchor="bottom",
+        y=1.02,
+        xanchor="center",
+        x=0.5,
+        title_text="",
+    ),
+    margin=dict(l=60, r=30, t=95, b=40),
+)
+
+fig.update_xaxes(hoverformat="Week ending %d %b %Y", showgrid=True, gridcolor="rgba(255,255,255,0.08)")
+fig.update_yaxes(showgrid=True, gridcolor="rgba(255,255,255,0.08)")
+
+fig.show()
+
+print("National Weekly Correlation Matrix (253 Weeks):")
+display(piv_wk[all_cols].corr().round(4))
+
