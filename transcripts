@@ -2566,3 +2566,218 @@ fig_top15.update_layout(
     margin=dict(l=150, r=40, t=95, b=80),
 )
 fig_top15.show()
+
+`````````````````
+
+%md
+### Step 3.2 — Which Cities Prefer "Everyday" Ultra Sheer vs. "Seasonal" Beach Defense?
+**Why looking at raw dollars alone can trick us:**
+- Big cities like **New York** and **Los Angeles** simply have more people, so they rank at the top for *both* Ultra Sheer and Beach Defense (`~0.97+` raw dollar correlation).
+- To find **true product preference differences across cities**, we calculate what **% of each city's Neutrogena Sun sales** comes from **Ultra Sheer** vs. **Beach Defense**:
+  - **National Average:** Ultra Sheer = **`41.8%`** of NTG Sun | Beach Defense = **`26.5%`** of NTG Sun (`0.63×` the size of Ultra Sheer).
+
+**How to read the 2 charts below:**
+1. **Chart 1 (4-Quadrant Map of All 196 DMAs):**
+   - **Horizontal axis (left → right):** Higher **Ultra Sheer %** in that city.
+   - **Vertical axis (bottom → top):** Higher **Beach Defense %** in that city.
+   - **Bubble size:** City sales size (`Total NTG Sun`) | **Color:** Green = Ultra Sheer-heavy city, Orange = Beach Defense-heavy city.
+   - **Top-Left Quadrant** = *"Beach Defense Strongholds"* (cities that buy unusually high Beach Defense vs. US average).
+   - **Bottom-Right Quadrant** = *"Ultra Sheer Everyday Strongholds"* (cities that lean heavily toward Ultra Sheer).
+2. **Chart 2 (Top 12 Cities in Each Direction — Among Top 60 Markets = 80% of Sales):**
+   - Filters out tiny noisy markets (`Rank 61–196`) and shows the **12 major cities with the strongest Beach Defense preference** vs. the **12 major cities with the strongest Ultra Sheer preference**.
+
+**What we achieve for 2027 Geo Optimization:**
+- Tells Yue whether **Ultra Sheer and Beach Defense win in the exact same cities** or whether **coastal/warm/vacation cities skew toward Beach Defense** while **northern/urban metros skew toward Ultra Sheer**—helping decide if media targeting should differ by market!
+
+
+
+from pyspark.sql import functions as F
+import numpy as np
+import pandas as pd
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
+
+TABLE = "`kvai-pro110033`.dev.circana_instore_ntg_aveeno_sun_protection_processed_20261117"
+
+PMAP_32 = {
+    "NEUTROGENA SUN PRTCTN": "Total NTG Sun",
+    "NEUTROGENA ULTRA SHEER SUN PRTCTN": "Ultra Sheer",
+    "NEUTROGENA BEACH DEFENSE SUN PRTCTN": "Beach Defense",
+}
+
+# 1. Load & aggregate cleanly to 1 row per DMA (all 196 DMAs)
+dma_raw = (
+    spark.table(TABLE)
+    .withColumn("Product", F.trim("Product"))
+    .filter(F.col("Product").isin(list(PMAP_32.keys())))
+    .groupBy("week_end", "dma_id", "Geography", "Product")
+    .agg(F.sum("dollar_sales").cast("long").alias("dollar_sales"))
+    .groupBy("dma_id", "Geography", "Product")
+    .agg(F.sum("dollar_sales").cast("long").alias("total_sales"))
+    .toPandas()
+)
+dma_raw["series"] = dma_raw["Product"].map(PMAP_32)
+
+d32 = (
+    dma_raw.pivot(index=["dma_id", "Geography"], columns="series", values="total_sales")
+    .fillna(0)
+    .reset_index()
+    .sort_values("Total NTG Sun", ascending=False)
+    .reset_index(drop=True)
+)
+d32["ntg_rank"] = d32.index + 1
+
+# Shares inside each city + Beach Defense-to-Ultra Sheer Ratio
+d32["us_pct"] = d32["Ultra Sheer"] / d32["Total NTG Sun"] * 100
+d32["bd_pct"] = d32["Beach Defense"] / d32["Total NTG Sun"] * 100
+d32["bd_to_us_ratio"] = np.where(d32["Ultra Sheer"] > 0, d32["Beach Defense"] / d32["Ultra Sheer"], 0)
+
+# National Benchmarks
+nat_us_pct = d32["Ultra Sheer"].sum() / d32["Total NTG Sun"].sum() * 100
+nat_bd_pct = d32["Beach Defense"].sum() / d32["Total NTG Sun"].sum() * 100
+nat_ratio  = d32["Beach Defense"].sum() / d32["Ultra Sheer"].sum()
+
+# ------------------------------------------------------------------
+# CHART 1: 4-Quadrant Scatter Plot Across All 196 DMAs
+# ------------------------------------------------------------------
+# Show text labels for Top 12 biggest DMAs so the chart stays clean & readable
+d32["label"] = np.where(d32["ntg_rank"] <= 12, d32["Geography"], "")
+
+fig_quad = go.Figure()
+
+fig_quad.add_trace(
+    go.Scatter(
+        x=d32["us_pct"],
+        y=d32["bd_pct"],
+        mode="markers+text",
+        text=d32["label"],
+        textposition="top center",
+        textfont=dict(size=9.5),
+        marker=dict(
+            size=np.clip(np.sqrt(d32["Total NTG Sun"] / 1e6) * 4.5, 6, 38),
+            color=d32["bd_to_us_ratio"],
+            colorscale=[[0.0, "#2E8B57"], [0.5, "#9E9E9E"], [1.0, "#F58518"]],
+            cmin=0.35,
+            cmax=0.95,
+            colorbar=dict(title="BD / US<br>Ratio", thickness=14),
+            line=dict(width=1, color="rgba(0,0,0,0.4)"),
+            opacity=0.85,
+        ),
+        customdata=list(zip(
+            d32["Geography"], d32["ntg_rank"],
+            d32["Total NTG Sun"] / 1e6, d32["Ultra Sheer"] / 1e6, d32["Beach Defense"] / 1e6,
+            d32["bd_to_us_ratio"]
+        )),
+        hovertemplate=(
+            "<b>%{customdata[0]}</b> (Rank #%{customdata[1]})<br>"
+            "Total NTG Sun: $%{customdata[2]:.1f}M<br>"
+            "Ultra Sheer: $%{customdata[3]:.1f}M (<b>%{x:.1f}%</b> of NTG)<br>"
+            "Beach Defense: $%{customdata[4]:.1f}M (<b>%{y:.1f}%</b> of NTG)<br>"
+            "Beach Defense / Ultra Sheer Ratio: <b>%{customdata[5]:.2f}x</b>"
+            "<extra></extra>"
+        ),
+    )
+)
+
+# Reference lines at US Averages
+fig_quad.add_vline(x=nat_us_pct, line_dash="dash", line_color="#54A24B", line_width=1.4)
+fig_quad.add_hline(y=nat_bd_pct, line_dash="dash", line_color="#F58518", line_width=1.4)
+
+# Quadrant Corner Annotations
+fig_quad.add_annotation(x=0.02, y=0.98, xref="paper", yref="paper", showarrow=False,
+                        text=f"<b>BEACH DEFENSE STRONGHOLDS</b><br>(Above {nat_bd_pct:.1f}% BD, Below {nat_us_pct:.1f}% US)",
+                        align="left", font=dict(size=10, color="#F58518"))
+fig_quad.add_annotation(x=0.98, y=0.02, xref="paper", yref="paper", showarrow=False,
+                        text=f"<b>ULTRA SHEER STRONGHOLDS</b><br>(Above {nat_us_pct:.1f}% US, Below {nat_bd_pct:.1f}% BD)",
+                        align="right", font=dict(size=10, color="#54A24B"))
+
+fig_quad.update_layout(
+    template="plotly_white",
+    height=560,
+    title=dict(
+        text="<b>All 196 DMAs: Ultra Sheer Share (%) vs. Beach Defense Share (%) Inside Each City</b><br>"
+             "<sup>Bubble size = City Total NTG Sales | Color = Beach Defense / Ultra Sheer Ratio | Hover any dot for city details</sup>",
+        x=0.5, xanchor="center"
+    ),
+    xaxis=dict(title=f"Ultra Sheer Share of City NTG Sales (%) — US Avg = {nat_us_pct:.1f}%"),
+    yaxis=dict(title=f"Beach Defense Share of City NTG Sales (%) — US Avg = {nat_bd_pct:.1f}%"),
+    margin=dict(l=65, r=40, t=95, b=60),
+)
+fig_quad.show()
+
+# ------------------------------------------------------------------
+# CHART 2: Top 12 Beach Defense-Skewed vs. Top 12 Ultra Sheer-Skewed
+#          (Filtered to Top 60 Major DMAs = 80% of US Sales)
+# ------------------------------------------------------------------
+top60 = d32[d32["ntg_rank"] <= 60].copy()
+bd_heavy = top60.sort_values("bd_to_us_ratio", ascending=False).head(12)
+us_heavy = top60.sort_values("bd_to_us_ratio", ascending=True).head(12)
+
+fig_skew = make_subplots(
+    rows=1, cols=2, horizontal_spacing=0.16,
+    subplot_titles=("<b>Top 12 Beach Defense-Skewed Cities</b><br><sup>(Among Top 60 DMAs — Highest BD/US Ratio)</sup>",
+                    "<b>Top 12 Ultra Sheer-Skewed Cities</b><br><sup>(Among Top 60 DMAs — Highest US Share)</sup>"),
+)
+
+for col_idx, sub_df in enumerate([bd_heavy, us_heavy], start=1):
+    fig_skew.add_trace(
+        go.Bar(
+            y=sub_df["Geography"],
+            x=sub_df["us_pct"],
+            name="Ultra Sheer (% of city NTG)",
+            legendgroup="us",
+            showlegend=(col_idx == 1),
+            orientation="h",
+            marker_color="#54A24B",
+            customdata=list(zip(sub_df["Ultra Sheer"]/1e6, sub_df["bd_to_us_ratio"])),
+            hovertemplate="%{x:.1f}% of NTG ($%{customdata[0]:.1f}M) | BD/US Ratio: %{customdata[1]:.2f}x<extra></extra>",
+        ),
+        row=1, col=col_idx
+    )
+    fig_skew.add_trace(
+        go.Bar(
+            y=sub_df["Geography"],
+            x=sub_df["bd_pct"],
+            name="Beach Defense (% of city NTG)",
+            legendgroup="bd",
+            showlegend=(col_idx == 1),
+            orientation="h",
+            marker_color="#F58518",
+            customdata=list(zip(sub_df["Beach Defense"]/1e6, sub_df["bd_to_us_ratio"])),
+            hovertemplate="%{x:.1f}% of NTG ($%{customdata[0]:.1f}M) | BD/US Ratio: %{customdata[1]:.2f}x<extra></extra>",
+        ),
+        row=1, col=col_idx
+    )
+    fig_skew.update_yaxes(autorange="reversed", row=1, col=col_idx)
+    fig_skew.update_xaxes(title_text="% Share of City NTG Sales", range=[0, 62], row=1, col=col_idx)
+
+fig_skew.update_layout(
+    template="plotly_white",
+    barmode="group",
+    height=520,
+    hovermode="y unified",
+    title=dict(
+        text="<b>City Preference Extremes (Top 60 DMAs): Beach Defense Cities vs. Ultra Sheer Cities</b><br>"
+             "<sup>Compare how far apart Green & Orange bars sit in each city vs. US Avg (41.8% vs 26.5%)</sup>",
+        x=0.5, xanchor="center", y=0.97
+    ),
+    legend=dict(orientation="h", yanchor="top", y=-0.14, xanchor="center", x=0.5),
+    margin=dict(l=135, r=30, t=115, b=80),
+)
+fig_skew.show()
+
+# Print Automated Takeaways for Step 3.2
+dma_corr = d32["Ultra Sheer"].corr(d32["Beach Defense"])
+top_bd_list = ", ".join(bd_heavy.head(5)["Geography"].tolist())
+top_us_list = ", ".join(us_heavy.head(5)["Geography"].tolist())
+
+print("=" * 78)
+print("EXECUTIVE TAKEAWAYS — STEP 3.2 (DMA PATTERNS: ULTRA SHEER VS. BEACH DEFENSE)")
+print("=" * 78)
+print(f"1. OVERALL DMA SALES CORRELATION: {dma_corr:.4f} (Big population cities buy more of both).")
+print(f"2. MIX SPREAD AMONG TOP 60 DMAs (80% of US Sales):")
+print(f"   - Ultra Sheer share ranges from {top60['us_pct'].min():.1f}% to {top60['us_pct'].max():.1f}% (US Avg = {nat_us_pct:.1f}%).")
+print(f"   - Beach Defense share ranges from {top60['bd_pct'].min():.1f}% to {top60['bd_pct'].max():.1f}% (US Avg = {nat_bd_pct:.1f}%).")
+print(f"3. STRONGEST BEACH DEFENSE CITIES: {top_bd_list}")
+print(f"4. STRONGEST ULTRA SHEER CITIES:   {top_us_list}")
+print("=" * 78)
