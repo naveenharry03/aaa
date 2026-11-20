@@ -3243,3 +3243,28 @@ print(f"DMA Sales Correlation (Ultra Sheer vs. Beach Defense across 196 DMAs): {
    - **Los Angeles, CA** (above the line) and **Florida / Southeast coastal states** buy slightly **more Beach Defense** than average (e.g., LA sells more Beach Defense `$31.7M` than New York `$28.2M`!).
    - **New York, NY**, **Boston, MA**, and **Northern/Northeast metros** (below the line) lean slightly **more toward Ultra Sheer** (`~2×` bigger than Beach Defense in NY & Boston).
 3. **Why this helps 2027 Geo Optimization:** Because the geographic preference difference is only mild (**±3–5 percentage points**), both products share the same core target markets—meaning **climate/seasonality differences across cities** (checked next in **Step 3.3**) will matter far more than which cities prefer which sub-brand!
+
+
+`````````````````````````````````````
+
+d32["bd_per_1_us"] = np.where(d32["Ultra Sheer"] > 0, d32["Beach Defense"] / d32["Ultra Sheer"], 0)
+nat_bd_per_us = d32["Beach Defense"].sum() / d32["Ultra Sheer"].sum()  # 0.63
+
+hover_dma = [
+    f"<b>{r['Geography']}</b> (Rank #{int(r['ntg_rank'])})<br>"
+    f"Total NTG Sun: ${r['Total NTG Sun']/1e6:.2f}M<br>"
+    f"Ultra Sheer: ${r['Ultra Sheer']/1e6:.2f}M ({r['us_pct']:.1f}%)<br>"
+    f"Beach Defense: ${r['Beach Defense']/1e6:.2f}M ({r['bd_pct']:.1f}%)<br>"
+    f"<b>Beach Defense per $1 of Ultra Sheer: ${r['bd_per_1_us']:.2f}</b> (US Avg: ${nat_bd_per_us:.2f})"
+    for _, r in d32.iterrows()
+]
+
+
+color=d32["bd_per_1_us"],
+        colorscale=[[0.0, "#2E8B57"], [0.5, "#9CA3AF"], [1.0, "#F58518"]],
+        cmin=0.40, cmax=0.86,   # centered right at US Avg = $0.63!
+        colorbar=dict(title="Beach Def per<br>$1 Ultra Sheer", thickness=14),
+
+
+And rename Button 1's label to "1. Beach Def per $1 of Ultra Sheer"!
+(If you want to update your State Map cell the exact same way, just compute state_df["bd_per_1_us"] = state_df["Beach Defense"] / state_df["Ultra Sheer"] with zmin=0.40, zmax=0.86!)
