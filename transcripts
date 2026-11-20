@@ -2781,3 +2781,262 @@ print(f"   - Beach Defense share ranges from {top60['bd_pct'].min():.1f}% to {to
 print(f"3. STRONGEST BEACH DEFENSE CITIES: {top_bd_list}")
 print(f"4. STRONGEST ULTRA SHEER CITIES:   {top_us_list}")
 print("=" * 78)
+
+
+``````````````````````````````````````````````
+%md
+### Step 3.2 — Ultra Sheer vs. Beach Defense Across DMAs: Do They Sell in the Same Markets?
+**What we are checking (in plain English):**
+- **Chart 1 (City-by-City Dollar Comparison with Cutoff Buttons):** Plots each city's **Ultra Sheer sales ($M)** against its **Beach Defense sales ($M)**.
+  - Use the **buttons at the top** (`All 196`, `Top 100`, `Top 90`, `Top 80`, `Top 70`, `Top 60`, `Top 50`, `Top 20`) to zoom into whichever DMA threshold you want to inspect.
+  - The **dotted line** is the US average (`Beach Defense ≈ 0.63 × Ultra Sheer`). Cities **above** the line buy extra Beach Defense; cities **below** the line lean extra toward Ultra Sheer.
+- **Chart 2 (Interactive US State Map):** Rolls each DMA up to its state so you can visually see **where Beach Defense vs. Ultra Sheer over-performs** across the US. Use the 3 buttons to switch views.
+
+**What this proves for Yue:**
+1. **Both products sell in the exact same cities (`0.99` correlation):** There is **no** major city where Beach Defense beats Ultra Sheer—both scale together with city size.
+2. **Mild regional climate pattern (visible on the map):** **Florida & the Southeast coast** lean slightly more toward Beach Defense (more beach/pool usage), while **Northeast & West Coast metros** lean slightly more toward Ultra Sheer (everyday wear).
+
+
+
+from pyspark.sql import functions as F
+import numpy as np
+import pandas as pd
+import plotly.graph_objects as go
+
+TABLE = "`kvai-pro110033`.dev.circana_instore_ntg_aveeno_sun_protection_processed_20261117"
+
+PMAP_32 = {
+    "NEUTROGENA SUN PRTCTN": "Total NTG Sun",
+    "NEUTROGENA ULTRA SHEER SUN PRTCTN": "Ultra Sheer",
+    "NEUTROGENA BEACH DEFENSE SUN PRTCTN": "Beach Defense",
+}
+
+# 1. Load & aggregate cleanly to 1 row per DMA (all 196 DMAs)
+dma_raw = (
+    spark.table(TABLE)
+    .withColumn("Product", F.trim("Product"))
+    .filter(F.col("Product").isin(list(PMAP_32.keys())))
+    .groupBy("week_end", "dma_id", "Geography", "Product")
+    .agg(F.sum("dollar_sales").cast("long").alias("dollar_sales"))
+    .groupBy("dma_id", "Geography", "Product")
+    .agg(F.sum("dollar_sales").cast("long").alias("total_sales"))
+    .toPandas()
+)
+dma_raw["series"] = dma_raw["Product"].map(PMAP_32)
+
+d32 = (
+    dma_raw.pivot(index=["dma_id", "Geography"], columns="series", values="total_sales")
+    .fillna(0)
+    .reset_index()
+    .sort_values("Total NTG Sun", ascending=False)
+    .reset_index(drop=True)
+)
+d32["ntg_rank"] = d32.index + 1
+d32["us_pct"] = d32["Ultra Sheer"] / d32["Total NTG Sun"] * 100
+d32["bd_pct"] = d32["Beach Defense"] / d32["Total NTG Sun"] * 100
+d32["state"]  = d32["Geography"].str.split(",").str[-1].str.strip()
+
+nat_ratio  = d32["Beach Defense"].sum() / d32["Ultra Sheer"].sum()   # ~0.63x
+nat_bd_pct = d32["Beach Defense"].sum() / d32["Total NTG Sun"].sum() * 100
+nat_us_pct = d32["Ultra Sheer"].sum() / d32["Total NTG Sun"].sum() * 100
+
+# ------------------------------------------------------------------
+# CHART 1: Real $M Scatter with Interactive Cutoff Buttons
+# ------------------------------------------------------------------
+cutoffs_32 = [("All 196", len(d32)), ("Top 100", 100), ("Top 90", 90), ("Top 80", 80),
+              ("Top 70", 70), ("Top 60", 60), ("Top 50", 50), ("Top 20", 20)]
+
+fig_cmp = go.Figure()
+buttons_32 = []
+total_ntg_us = d32["Total NTG Sun"].sum()
+
+for i, (lbl, n) in enumerate(cutoffs_32):
+    sub = d32.head(n).copy()
+    is_vis = (lbl == "All 196")
+    cov_pct = sub["Total NTG Sun"].sum() / total_ntg_us * 100
+
+    # Label top 8 cities inside each view so chart stays clean
+    sub["txt"] = np.where(sub["ntg_rank"] <= 8, sub["Geography"], "")
+    # Above/below US ratio color: Orange = more Beach Defense than avg, Green = more Ultra Sheer
+    sub["tilt"] = sub["bd_pct"] - nat_bd_pct
+
+    fig_cmp.add_trace(
+        go.Scatter(
+            x=sub["Ultra Sheer"] / 1e6,
+            y=sub["Beach Defense"] / 1e6,
+            mode="markers+text",
+            text=sub["txt"],
+            textposition="top center",
+            textfont=dict(size=9),
+            visible=is_vis,
+            showlegend=False,
+            marker=dict(
+                size=np.clip(np.sqrt(sub["Total NTG Sun"] / 1e6) * 4.2, 6, 34),
+                color=sub["tilt"],
+                colorscale=[[0.0, "#54A24B"], [0.5, "#B0B0B0"], [1.0, "#F58518"]],
+                cmin=-6, cmax=6,
+                colorbar=dict(title="BD Share vs<br>US Avg (% pts)", thickness=13),
+                line=dict(width=1, color="rgba(0,0,0,0.35)"),
+                opacity=0.88,
+            ),
+            customdata=list(zip(
+                sub["Geography"], sub["ntg_rank"], sub["Total NTG Sun"]/1e6,
+                sub["us_pct"], sub["bd_pct"]
+            )),
+            hovertemplate=(
+                "<b>%{customdata[0]}</b> (Rank #%{customdata[1]})<br>"
+                "Total NTG Sun: $%{customdata[2]:.1f}M<br>"
+                "Ultra Sheer: <b>$%{x:.2f}M</b> (%{customdata[3]:.1f}% of city NTG)<br>"
+                "Beach Defense: <b>$%{y:.2f}M</b> (%{customdata[4]:.1f}% of city NTG)"
+                "<extra></extra>"
+            ),
+        )
+    )
+
+    # Diagonal US-Average reference line (Beach Defense = 0.63 * Ultra Sheer)
+    max_x = (sub["Ultra Sheer"].max() / 1e6) * 1.06
+    fig_cmp.add_trace(
+        go.Scatter(
+            x=[0, max_x],
+            y=[0, max_x * nat_ratio],
+            mode="lines",
+            visible=is_vis,
+            name=f"US Avg Pace (BD = {nat_ratio:.2f}x US)",
+            line=dict(color="gray", dash="dot", width=1.6),
+            hoverinfo="skip",
+        )
+    )
+
+    vis_mask = [j in (2*i, 2*i + 1) for j in range(2 * len(cutoffs_32))]
+    buttons_32.append(dict(
+        label=lbl,
+        method="update",
+        args=[
+            {"visible": vis_mask},
+            {"title.text": (
+                f"<b>Ultra Sheer vs. Beach Defense Sales by DMA — {lbl} DMAs ({cov_pct:.1f}% of US NTG Sales)</b><br>"
+                "<sup>Dots above dotted line buy extra Beach Defense (Orange) | Dots below lean extra Ultra Sheer (Green)</sup>"
+            )}
+        ]
+    ))
+
+fig_cmp.update_layout(
+    template="plotly_white",
+    height=540,
+    title=dict(
+        text="<b>Ultra Sheer vs. Beach Defense Sales by DMA — All 196 DMAs (100.0% of US NTG Sales)</b><br>"
+             "<sup>Dots above dotted line buy extra Beach Defense (Orange) | Dots below lean extra Ultra Sheer (Green)</sup>",
+        x=0.5, xanchor="center", y=0.97
+    ),
+    xaxis_title="Ultra Sheer 5-Year Sales (USD Millions)",
+    yaxis_title="Beach Defense 5-Year Sales (USD Millions)",
+    updatemenus=[dict(
+        type="buttons",
+        direction="right",
+        x=0.5, xanchor="center",
+        y=1.13, yanchor="top",
+        buttons=buttons_32,
+        bgcolor="#F0F2F6",
+        font=dict(size=11, color="#111111"),
+    )],
+    legend=dict(orientation="h", yanchor="top", y=-0.13, xanchor="center", x=0.5),
+    margin=dict(l=65, r=40, t=125, b=70),
+)
+fig_cmp.show()
+
+# ------------------------------------------------------------------
+# CHART 2: Interactive US Map by State (3 Views)
+# ------------------------------------------------------------------
+state_df = (
+    d32[d32["state"].str.len() == 2]
+    .groupby("state", as_index=False)
+    .agg({
+        "Total NTG Sun": "sum",
+        "Ultra Sheer": "sum",
+        "Beach Defense": "sum",
+        "dma_id": "count",
+    })
+    .rename(columns={"dma_id": "dma_count"})
+)
+state_df["us_pct"] = state_df["Ultra Sheer"] / state_df["Total NTG Sun"] * 100
+state_df["bd_pct"] = state_df["Beach Defense"] / state_df["Total NTG Sun"] * 100
+state_df["bd_tilt"] = state_df["bd_pct"] - nat_bd_pct   # + = more Beach Defense than US avg
+
+hover_txt = [
+    f"<b>{r['state']}</b> ({int(r['dma_count'])} DMAs)<br>"
+    f"Total NTG Sun: ${r['Total NTG Sun']/1e6:.1f}M<br>"
+    f"Ultra Sheer: ${r['Ultra Sheer']/1e6:.1f}M ({r['us_pct']:.1f}%)<br>"
+    f"Beach Defense: ${r['Beach Defense']/1e6:.1f}M ({r['bd_pct']:.1f}%)<br>"
+    f"BD vs US Avg: {r['bd_tilt']:+.1f} percentage pts"
+    for _, r in state_df.iterrows()
+]
+
+fig_map = go.Figure()
+
+# View 1: Regional Preference Tilt (Orange = Beach Defense heavy, Green = Ultra Sheer heavy)
+fig_map.add_trace(go.Choropleth(
+    locations=state_df["state"],
+    locationmode="USA-states",
+    z=state_df["bd_tilt"],
+    colorscale=[[0.0, "#2E8B57"], [0.5, "#E5E7EB"], [1.0, "#F58518"]],
+    zmin=-6, zmax=6,
+    colorbar_title="BD Share vs<br>US Avg (% pts)",
+    text=hover_txt,
+    hovertemplate="%{text}<extra></extra>",
+    visible=True,
+))
+
+# View 2: Ultra Sheer Total Sales ($M)
+fig_map.add_trace(go.Choropleth(
+    locations=state_df["state"],
+    locationmode="USA-states",
+    z=state_df["Ultra Sheer"] / 1e6,
+    colorscale="Greens",
+    colorbar_title="Ultra Sheer<br>Sales ($M)",
+    text=hover_txt,
+    hovertemplate="%{text}<extra></extra>",
+    visible=False,
+))
+
+# View 3: Beach Defense Total Sales ($M)
+fig_map.add_trace(go.Choropleth(
+    locations=state_df["state"],
+    locationmode="USA-states",
+    z=state_df["Beach Defense"] / 1e6,
+    colorscale="Oranges",
+    colorbar_title="Beach Defense<br>Sales ($M)",
+    text=hover_txt,
+    hovertemplate="%{text}<extra></extra>",
+    visible=False,
+))
+
+fig_map.update_layout(
+    template="plotly_white",
+    geo=dict(scope="usa", projection_type="albers usa", showlakes=True, lakecolor="rgba(173,216,230,0.3)"),
+    height=520,
+    title=dict(
+        text="<b>US Geographic Map: Where Do Ultra Sheer & Beach Defense Sell Most?</b><br>"
+             "<sup>Orange = States leaning more toward Beach Defense | Green = States leaning more toward Ultra Sheer</sup>",
+        x=0.5, xanchor="center", y=0.96
+    ),
+    updatemenus=[dict(
+        type="buttons",
+        direction="right",
+        x=0.5, xanchor="center",
+        y=1.10, yanchor="top",
+        bgcolor="#F0F2F6",
+        font=dict(size=11, color="#111111"),
+        buttons=[
+            dict(label="1. Regional Tilt (BD vs. US)", method="update",
+                 args=[{"visible": [True, False, False]}]),
+            dict(label="2. Ultra Sheer Sales ($M)", method="update",
+                 args=[{"visible": [False, True, False]}]),
+            dict(label="3. Beach Defense Sales ($M)", method="update",
+                 args=[{"visible": [False, False, True]}]),
+        ],
+    )],
+    margin=dict(l=20, r=20, t=115, b=20),
+)
+fig_map.show()
+
+print(f"DMA Sales Correlation (Ultra Sheer vs. Beach Defense across 196 DMAs): {d32['Ultra Sheer'].corr(d32['Beach Defense']):.4f}")
