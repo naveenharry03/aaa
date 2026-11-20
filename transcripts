@@ -3040,3 +3040,206 @@ fig_map.update_layout(
 fig_map.show()
 
 print(f"DMA Sales Correlation (Ultra Sheer vs. Beach Defense across 196 DMAs): {d32['Ultra Sheer'].corr(d32['Beach Defense']):.4f}")
+`````````````````````````
+
+
+# ------------------------------------------------------------------
+# CHART 2: Interactive US Map Plotting ALL 196 Individual DMAs
+# ------------------------------------------------------------------
+DMA_COORDS = {
+    "Abilene,TX": (32.45, -99.73), "Albany,GA": (31.58, -84.16), "Albany,NY": (42.65, -73.75),
+    "Albuquerque,NM": (35.08, -106.65), "Alexandria,LA": (31.31, -92.44), "Alpena,MI": (45.06, -83.43),
+    "Amarillo,TX": (35.22, -101.83), "Atlanta,GA": (33.75, -84.39), "Augusta,GA": (33.47, -82.01),
+    "Bakersfield,CA": (35.37, -119.02), "Baltimore,MD": (39.29, -76.61), "Bangor,ME": (44.80, -68.77),
+    "Baton Rouge,LA": (30.45, -91.19), "Beaumont,TX": (30.08, -94.13), "Bend,OR": (44.06, -121.32),
+    "Billings,MT": (45.78, -108.50), "Binghamton,NY": (42.10, -75.92), "Birmingham,AL": (33.52, -86.81),
+    "Bluefield,WV": (37.27, -81.22), "Boise,ID": (43.62, -116.20), "Boston,MA": (42.36, -71.06),
+    "Bowling Green,KY": (36.97, -86.48), "Buffalo,NY": (42.89, -78.88), "Burlington,VT": (44.48, -73.21),
+    "Butte,MT": (46.00, -112.53), "Casper,WY": (42.85, -106.31), "Cedar Rapids,IA": (41.98, -91.67),
+    "Champaign,IL": (40.12, -88.24), "Charleston,SC": (32.78, -79.93), "Charleston,WV": (38.35, -81.63),
+    "Charlotte,NC": (35.23, -80.84), "Charlottesville,VA": (38.03, -78.48), "Chattanooga,TN": (35.05, -85.31),
+    "Cheyenne,WY": (41.14, -104.82), "Chicago,IL": (41.88, -87.63), "Chico,CA": (39.73, -121.84),
+    "Cincinnati,OH": (39.10, -84.51), "Clarksburg,WV": (39.28, -80.34), "Cleveland,OH": (41.50, -81.69),
+    "Colorado Springs,CO": (38.83, -104.82), "Columbia,MO": (38.95, -92.33), "Columbia,SC": (34.00, -81.03),
+    "Columbus,GA": (32.46, -84.99), "Columbus,MS": (33.50, -88.43), "Columbus,OH": (39.96, -82.99),
+    "Dallas,TX": (32.78, -96.80), "Davenport,IA": (41.52, -90.58), "Dayton,OH": (39.76, -84.19),
+    "Denver,CO": (39.74, -104.99), "Des Moines,IA": (41.59, -93.62), "Detroit,MI": (42.33, -83.05),
+    "Dothan,AL": (31.22, -85.39), "Duluth,MN": (46.79, -92.10), "El Paso,TX": (31.76, -106.49),
+    "Elmira,NY": (42.09, -76.81), "Erie,PA": (42.13, -80.09), "Eugene,OR": (44.05, -123.09),
+    "Eureka,CA": (40.80, -124.16), "Evansville,IN": (37.97, -87.57), "Fargo,ND": (46.88, -96.79),
+    "Flint,MI": (43.01, -83.69), "Florence,SC": (34.20, -79.76), "Fresno,CA": (36.74, -119.79),
+    "Ft. Myers,FL": (26.64, -81.87), "Ft. Wayne,IN": (41.08, -85.14), "Gainesville,FL": (29.65, -82.32),
+    "Grand Junction,CO": (39.06, -108.55), "Grand Rapids,MI": (42.96, -85.67), "Great Falls,MT": (47.50, -111.30),
+    "Green Bay,WI": (44.51, -88.02), "Greensboro,NC": (36.07, -79.79), "Greenville,NC": (35.61, -77.37),
+    "Greenville,SC": (34.85, -82.40), "Greenwood,MS": (33.52, -90.18), "Harlingen,TX": (26.19, -97.70),
+    "Harrisburg,PA": (40.27, -76.89), "Harrisonburg,VA": (38.45, -78.87), "Hartford,CT": (41.76, -72.67),
+    "Hattiesburg,MS": (31.33, -89.29), "Helena,MT": (46.59, -112.04), "Houston,TX": (29.76, -95.37),
+    "Huntsville,AL": (34.73, -86.59), "Idaho Falls,ID": (43.49, -112.03), "Indianapolis,IN": (39.77, -86.16),
+    "Jackson,MS": (32.30, -90.18), "Jackson,TN": (35.61, -88.81), "Jacksonville,FL": (30.33, -81.66),
+    "Johnstown,PA": (40.33, -78.92), "Jonesbro,AR": (35.84, -90.70), "Kansas City,MO": (39.10, -94.58),
+    "Knoxville,TN": (35.96, -83.92), "La Crosse,WI": (43.80, -91.24), "Lafayette,IN": (40.42, -86.88),
+    "Lafayette,LA": (30.22, -92.02), "Lake Charles,LA": (30.23, -93.22), "Lansing,MI": (42.73, -84.56),
+    "Las Vegas,NV": (36.17, -115.14), "Lexington,KY": (38.04, -84.50), "Lima,OH": (40.74, -84.11),
+    "Lincoln/Hastings,NE": (40.81, -96.70), "Little Rock,AR": (34.75, -92.29), "Los Angeles,CA": (34.05, -118.24),
+    "Louisville,KY": (38.25, -85.76), "Lubbock,TX": (33.58, -101.86), "Macon,GA": (32.84, -83.63),
+    "Madison,WI": (43.07, -89.40), "Mankato,MN": (44.16, -94.00), "Marquette,MI": (46.54, -87.40),
+    "Medford,OR": (42.33, -122.88), "Memphis,TN": (35.15, -90.05), "Meridian,MS": (32.36, -88.70),
+    "Miami,FL": (25.76, -80.19), "Milwaukee,WI": (43.04, -87.91), "Minneapolis,MN": (44.98, -93.27),
+    "Minot,ND": (48.23, -101.30), "Missoula,MT": (46.87, -114.00), "Mobile,AL": (30.69, -88.04),
+    "Monroe,LA": (32.51, -92.12), "Monterey,CA": (36.60, -121.89), "Montgomery,AL": (32.37, -86.30),
+    "Nashville,TN": (36.16, -86.78), "New Orleans,LA": (29.95, -90.07), "New York,NY": (40.71, -74.01),
+    "Norfolk,VA": (36.85, -76.29), "Odessa,TX": (31.85, -102.37), "Oklahoma City,OK": (35.47, -97.52),
+    "Omaha,NE": (41.26, -95.93), "Orlando,FL": (28.54, -81.38), "Ottumwa,IA": (41.02, -92.41),
+    "Paducah,KY": (37.08, -88.60), "Panama City,FL": (30.16, -85.66), "Parkersburg,WV": (39.27, -81.56),
+    "Peoria,IL": (40.69, -89.59), "Philadelphia,PA": (39.95, -75.17), "Phoenix,AZ": (33.45, -112.07),
+    "Pittsburgh,PA": (40.44, -80.00), "Portland,ME": (43.66, -70.26), "Portland,OR": (45.52, -122.68),
+    "Presque Isle,ME": (46.68, -68.02), "Providence,RI": (41.82, -71.41), "Quincy,IL": (39.94, -91.41),
+    "Raleigh,NC": (35.78, -78.64), "Rapid Cty,SD": (44.08, -103.23), "Reno,NV": (39.53, -119.81),
+    "Richmond,VA": (37.54, -77.44), "Roanoke,VA": (37.27, -79.94), "Rochester,MN": (44.01, -92.48),
+    "Rochester,NY": (43.16, -77.61), "Rockford,IL": (42.27, -89.09), "Sacramento,CA": (38.58, -121.49),
+    "Salisbury,MD": (38.36, -75.60), "Salt Lake City,UT": (40.76, -111.89), "San Angelo,TX": (31.46, -100.44),
+    "San Diego,CA": (32.72, -117.16), "San Francisco,CA": (37.77, -122.42), "Santa Barbra,CA": (34.42, -119.70),
+    "Savannah,GA": (32.08, -81.09), "Seattle,WA": (47.61, -122.33), "Sherman,TX": (33.64, -96.61),
+    "Shreveport,LA": (32.53, -93.75), "Sioux Cty,IA": (42.50, -96.40), "Sioux Falls,SD": (43.55, -96.73),
+    "South Bend,IN": (41.68, -86.25), "Spokane,WA": (47.66, -117.43), "Springfield,MA": (42.10, -72.59),
+    "Springfield,MO": (37.21, -93.29), "St. Joseph,MO": (39.77, -94.85), "St. Louis,MO": (38.63, -90.20),
+    "Syracuse,NY": (43.05, -76.15), "Tallahassee,FL": (30.44, -84.28), "Tampa,FL": (27.95, -82.46),
+    "Terre Haute,IN": (39.47, -87.41), "Toledo,OH": (41.65, -83.54), "Topeka,KS": (39.05, -95.68),
+    "Traverse City,MI": (44.76, -85.62), "Tri Cities,TN": (36.48, -82.40), "Tucson,AZ": (32.22, -110.97),
+    "Tulsa,OK": (36.15, -95.99), "Twin Falls,ID": (42.56, -114.46), "Tyler,TX": (32.35, -95.30),
+    "Utica,NY": (43.10, -75.23), "Victoria,TX": (28.81, -97.00), "Waco,TX": (31.55, -97.15),
+    "Washington,DC": (38.91, -77.04), "Watertown,NY": (43.97, -75.91), "Wausau,WI": (44.96, -89.63),
+    "West Palm Beach,FL": (26.71, -80.05), "Wheeling,WV": (40.06, -80.72), "Wichita Falls,TX": (33.91, -98.49),
+    "Wichita,KS": (37.69, -97.34), "Wilkes Barre,PA": (41.25, -75.88), "Wilmington,NC": (34.23, -77.94),
+    "Yakima,WA": (46.60, -120.51), "Youngstown,OH": (41.10, -80.65), "Yuma,AZ": (32.69, -114.63),
+    "Zanesville,OH": (39.94, -82.01),
+}
+
+d32["lat"] = d32["Geography"].map(lambda g: DMA_COORDS.get(g, (None, None))[0])
+d32["lon"] = d32["Geography"].map(lambda g: DMA_COORDS.get(g, (None, None))[1])
+d32["bd_tilt"] = d32["bd_pct"] - nat_bd_pct
+
+print(f"DMAs plotted on US Map: {d32['lat'].notna().sum()} of {len(d32)}")
+
+hover_dma = [
+    f"<b>{r['Geography']}</b> (Rank #{int(r['ntg_rank'])})<br>"
+    f"Total NTG Sun: ${r['Total NTG Sun']/1e6:.2f}M<br>"
+    f"Ultra Sheer: ${r['Ultra Sheer']/1e6:.2f}M ({r['us_pct']:.1f}%)<br>"
+    f"Beach Defense: ${r['Beach Defense']/1e6:.2f}M ({r['bd_pct']:.1f}%)<br>"
+    f"Preference vs US Avg: {r['bd_tilt']:+.1f} pts (+ = more Beach Defense)"
+    for _, r in d32.iterrows()
+]
+
+bubble_sizes = np.clip(np.sqrt(d32["Total NTG Sun"] / 1e6) * 4.0, 5, 34)
+fig_map = go.Figure()
+
+# Layer 0 (Always visible): Soft US State outline map in background
+us_states = sorted([s for s in d32["state"].unique() if len(s) == 2 and s != "DC"])
+fig_map.add_trace(go.Choropleth(
+    locations=us_states,
+    locationmode="USA-states",
+    z=[1] * len(us_states),
+    colorscale=[[0, "#F3F4F6"], [1, "#F3F4F6"]],
+    showscale=False,
+    marker_line_color="#9CA3AF",
+    marker_line_width=0.8,
+    hoverinfo="skip",
+    visible=True,
+))
+
+# Layer 1: All 196 DMAs — Product Preference (Orange = Beach Defense heavy, Green = Ultra Sheer heavy)
+fig_map.add_trace(go.Scattergeo(
+    lat=d32["lat"], lon=d32["lon"],
+    mode="markers",
+    marker=dict(
+        size=bubble_sizes,
+        color=d32["bd_tilt"],
+        colorscale=[[0.0, "#2E8B57"], [0.5, "#9CA3AF"], [1.0, "#F58518"]],
+        cmin=-6, cmax=6,
+        colorbar=dict(title="BD Share vs<br>US Avg (% pts)", thickness=14),
+        line=dict(width=0.8, color="rgba(0,0,0,0.45)"),
+        opacity=0.9,
+    ),
+    text=hover_dma,
+    hovertemplate="%{text}<extra></extra>",
+    visible=True,
+))
+
+# Layer 2: All 196 DMAs — Ultra Sheer Sales ($M)
+fig_map.add_trace(go.Scattergeo(
+    lat=d32["lat"], lon=d32["lon"],
+    mode="markers",
+    marker=dict(
+        size=bubble_sizes,
+        color=d32["Ultra Sheer"] / 1e6,
+        colorscale="Greens",
+        colorbar=dict(title="Ultra Sheer<br>Sales ($M)", thickness=14),
+        line=dict(width=0.8, color="rgba(0,0,0,0.45)"),
+        opacity=0.9,
+    ),
+    text=hover_dma,
+    hovertemplate="%{text}<extra></extra>",
+    visible=False,
+))
+
+# Layer 3: All 196 DMAs — Beach Defense Sales ($M)
+fig_map.add_trace(go.Scattergeo(
+    lat=d32["lat"], lon=d32["lon"],
+    mode="markers",
+    marker=dict(
+        size=bubble_sizes,
+        color=d32["Beach Defense"] / 1e6,
+        colorscale="Oranges",
+        colorbar=dict(title="Beach Defense<br>Sales ($M)", thickness=14),
+        line=dict(width=0.8, color="rgba(0,0,0,0.45)"),
+        opacity=0.9,
+    ),
+    text=hover_dma,
+    hovertemplate="%{text}<extra></extra>",
+    visible=False,
+))
+
+fig_map.update_layout(
+    template="plotly_white",
+    geo=dict(scope="usa", projection_type="albers usa", showlakes=True, lakecolor="rgba(173,216,230,0.35)"),
+    height=560,
+    title=dict(
+        text="<b>All 196 US DMAs Mapped: Where Do Ultra Sheer & Beach Defense Sell Most?</b><br>"
+             "<sup>Bubble size = City Total NTG Sales | Hover any city bubble for exact DMA sales & shares</sup>",
+        x=0.5, xanchor="center", y=0.96
+    ),
+    updatemenus=[dict(
+        type="buttons",
+        direction="right",
+        x=0.5, xanchor="center",
+        y=1.09, yanchor="top",
+        bgcolor="#F0F2F6",
+        font=dict(size=11, color="#111111"),
+        buttons=[
+            dict(label="1. Product Preference (BD vs. US)", method="update",
+                 args=[{"visible": [True, True, False, False]}]),
+            dict(label="2. Ultra Sheer Sales ($M)", method="update",
+                 args=[{"visible": [True, False, True, False]}]),
+            dict(label="3. Beach Defense Sales ($M)", method="update",
+                 args=[{"visible": [True, False, False, True]}]),
+        ],
+    )],
+    margin=dict(l=20, r=20, t=115, b=20),
+)
+fig_map.show()
+
+print(f"DMA Sales Correlation (Ultra Sheer vs. Beach Defense across 196 DMAs): {d32['Ultra Sheer'].corr(d32['Beach Defense']):.4f}")
+
+
+%md
+### Step 3.2 — Ultra Sheer vs. Beach Defense Across DMAs: Do They Sell in the Same Markets?
+**What we are checking:**
+- **Chart 1 (City-by-City Comparison with Cutoff Buttons):** Plots every city's **Ultra Sheer ($M)** vs. **Beach Defense ($M)** against the dotted US average line (`Beach Defense ≈ 0.63 × Ultra Sheer`). Use the top buttons (`All 196` down to `Top 20`) to inspect any DMA threshold.
+- **Chart 2 (US Map by State):** Shows total sales size by state (`Buttons 2 & 3`) and **Product Preference** (`Button 1`: whether a state leans slightly more toward Beach Defense or Ultra Sheer vs. the `26.5%` US average).
+
+**What we are seeing & what we achieve (Key Insights for Yue):**
+1. **Almost Identical Geographic Footprint (`0.9908` Correlation):** Every major city sits very close to the dotted line. Big markets like **California ($233.6M NTG)**, **New York**, **Florida**, and **Texas** are the #1 volume drivers for **both** Ultra Sheer and Beach Defense—we do **not** need a completely different list of cities for Beach Defense vs. Ultra Sheer.
+2. **Subtle City Differences (Beach vs. Metro):**
+   - **Los Angeles, CA** (above the line) and **Florida / Southeast coastal states** buy slightly **more Beach Defense** than average (e.g., LA sells more Beach Defense `$31.7M` than New York `$28.2M`!).
+   - **New York, NY**, **Boston, MA**, and **Northern/Northeast metros** (below the line) lean slightly **more toward Ultra Sheer** (`~2×` bigger than Beach Defense in NY & Boston).
+3. **Why this helps 2027 Geo Optimization:** Because the geographic preference difference is only mild (**±3–5 percentage points**), both products share the same core target markets—meaning **climate/seasonality differences across cities** (checked next in **Step 3.3**) will matter far more than which cities prefer which sub-brand!
