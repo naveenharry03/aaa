@@ -3268,3 +3268,389 @@ color=d32["bd_per_1_us"],
 
 And rename Button 1's label to "1. Beach Def per $1 of Ultra Sheer"!
 (If you want to update your State Map cell the exact same way, just compute state_df["bd_per_1_us"] = state_df["Beach Defense"] / state_df["Ultra Sheer"] with zmin=0.40, zmax=0.86!)
+
+
+
+```````````````````````
+
+%md
+### Step 3.3 — Seasonality Across 196 DMAs: Warm Year-Round Cities vs. Cold Summer-Only Cities
+**What we are checking & how it is calculated:**
+- Using the **3 complete years (`2023–2025`)**, for every single one of the **196 DMAs** we compare:
+  - **Summer Sales** (`May–Aug`, Weeks 18–35 — 18 weeks)
+  - **Winter Sales** (`Nov–Feb`, Weeks 1–9 & 44–52 — 18 weeks)
+- We calculate each city's **Summer-to-Winter Ratio** (`Avg Weekly Summer $ ÷ Avg Weekly Winter $`):
+  - **Low number (e.g., `2x–4x`):** Year-round market — people still buy sunscreen in winter!
+  - **High number (e.g., `12x–25x+`):** Extreme summer-only market — winter sales nearly disappear.
+
+**How to read the 3 interactive charts & table below:**
+1. **Chart 1 (Every City: Ultra Sheer vs. Beach Defense Swing + Cutoff Buttons):**
+   - Plots each city's **Ultra Sheer swing (horizontal)** vs. **Beach Defense swing (vertical)**.
+   - Any city **above the dotted diagonal line** means Beach Defense is *more* seasonal than Ultra Sheer inside that city.
+2. **Chart 2 (US Map of City Seasonality — 196 DMAs):**
+   - Shows the geographic climate pattern across America (**Teal/Blue = Year-Round Warm Markets** vs. **Orange/Red = Extreme Cold-Winter Markets**). Switch buttons to view `Total NTG Sun`, `Ultra Sheer`, or `Beach Defense`.
+3. **Chart 3 & Climate Table (3 Data-Driven Climate Groups):**
+   - Automatically groups all 196 DMAs into 3 equal data-driven climate tiers (**Warm / Year-Round**, **Moderate**, **Cold-Winter**) and compares **Week 1–52 curves** for Warm Cities vs. Cold Cities.
+
+**Why this is critical for 2027 Geo Optimization:**
+- **Never treat Miami and Minneapolis the same:** In Cold-Winter DMAs, Beach Defense drops ~20× in winter while Warm DMAs keep strong baseline demand into Spring/Fall/Winter.
+- **Better Geo-Test / Model Matching:** When pairing test and control markets in Geo Optimization, markets must be matched within the **same seasonal climate group**.
+
+
+
+from pyspark.sql import functions as F
+import numpy as np
+import pandas as pd
+import plotly.graph_objects as go
+
+TABLE = "`kvai-pro110033`.dev.circana_instore_ntg_aveeno_sun_protection_processed_20261117"
+
+PMAP_33 = {
+    "NEUTROGENA SUN PRTCTN": "Total NTG Sun",
+    "NEUTROGENA ULTRA SHEER SUN PRTCTN": "Ultra Sheer",
+    "NEUTROGENA BEACH DEFENSE SUN PRTCTN": "Beach Defense",
+}
+
+DMA_COORDS = {
+    "Abilene,TX": (32.45, -99.73), "Albany,GA": (31.58, -84.16), "Albany,NY": (42.65, -73.75),
+    "Albuquerque,NM": (35.08, -106.65), "Alexandria,LA": (31.31, -92.44), "Alpena,MI": (45.06, -83.43),
+    "Amarillo,TX": (35.22, -101.83), "Atlanta,GA": (33.75, -84.39), "Augusta,GA": (33.47, -82.01),
+    "Bakersfield,CA": (35.37, -119.02), "Baltimore,MD": (39.29, -76.61), "Bangor,ME": (44.80, -68.77),
+    "Baton Rouge,LA": (30.45, -91.19), "Beaumont,TX": (30.08, -94.13), "Bend,OR": (44.06, -121.32),
+    "Billings,MT": (45.78, -108.50), "Binghamton,NY": (42.10, -75.92), "Birmingham,AL": (33.52, -86.81),
+    "Bluefield,WV": (37.27, -81.22), "Boise,ID": (43.62, -116.20), "Boston,MA": (42.36, -71.06),
+    "Bowling Green,KY": (36.97, -86.48), "Buffalo,NY": (42.89, -78.88), "Burlington,VT": (44.48, -73.21),
+    "Butte,MT": (46.00, -112.53), "Casper,WY": (42.85, -106.31), "Cedar Rapids,IA": (41.98, -91.67),
+    "Champaign,IL": (40.12, -88.24), "Charleston,SC": (32.78, -79.93), "Charleston,WV": (38.35, -81.63),
+    "Charlotte,NC": (35.23, -80.84), "Charlottesville,VA": (38.03, -78.48), "Chattanooga,TN": (35.05, -85.31),
+    "Cheyenne,WY": (41.14, -104.82), "Chicago,IL": (41.88, -87.63), "Chico,CA": (39.73, -121.84),
+    "Cincinnati,OH": (39.10, -84.51), "Clarksburg,WV": (39.28, -80.34), "Cleveland,OH": (41.50, -81.69),
+    "Colorado Springs,CO": (38.83, -104.82), "Columbia,MO": (38.95, -92.33), "Columbia,SC": (34.00, -81.03),
+    "Columbus,GA": (32.46, -84.99), "Columbus,MS": (33.50, -88.43), "Columbus,OH": (39.96, -82.99),
+    "Dallas,TX": (32.78, -96.80), "Davenport,IA": (41.52, -90.58), "Dayton,OH": (39.76, -84.19),
+    "Denver,CO": (39.74, -104.99), "Des Moines,IA": (41.59, -93.62), "Detroit,MI": (42.33, -83.05),
+    "Dothan,AL": (31.22, -85.39), "Duluth,MN": (46.79, -92.10), "El Paso,TX": (31.76, -106.49),
+    "Elmira,NY": (42.09, -76.81), "Erie,PA": (42.13, -80.09), "Eugene,OR": (44.05, -123.09),
+    "Eureka,CA": (40.80, -124.16), "Evansville,IN": (37.97, -87.57), "Fargo,ND": (46.88, -96.79),
+    "Flint,MI": (43.01, -83.69), "Florence,SC": (34.20, -79.76), "Fresno,CA": (36.74, -119.79),
+    "Ft. Myers,FL": (26.64, -81.87), "Ft. Wayne,IN": (41.08, -85.14), "Gainesville,FL": (29.65, -82.32),
+    "Grand Junction,CO": (39.06, -108.55), "Grand Rapids,MI": (42.96, -85.67), "Great Falls,MT": (47.50, -111.30),
+    "Green Bay,WI": (44.51, -88.02), "Greensboro,NC": (36.07, -79.79), "Greenville,NC": (35.61, -77.37),
+    "Greenville,SC": (34.85, -82.40), "Greenwood,MS": (33.52, -90.18), "Harlingen,TX": (26.19, -97.70),
+    "Harrisburg,PA": (40.27, -76.89), "Harrisonburg,VA": (38.45, -78.87), "Hartford,CT": (41.76, -72.67),
+    "Hattiesburg,MS": (31.33, -89.29), "Helena,MT": (46.59, -112.04), "Houston,TX": (29.76, -95.37),
+    "Huntsville,AL": (34.73, -86.59), "Idaho Falls,ID": (43.49, -112.03), "Indianapolis,IN": (39.77, -86.16),
+    "Jackson,MS": (32.30, -90.18), "Jackson,TN": (35.61, -88.81), "Jacksonville,FL": (30.33, -81.66),
+    "Johnstown,PA": (40.33, -78.92), "Jonesbro,AR": (35.84, -90.70), "Kansas City,MO": (39.10, -94.58),
+    "Knoxville,TN": (35.96, -83.92), "La Crosse,WI": (43.80, -91.24), "Lafayette,IN": (40.42, -86.88),
+    "Lafayette,LA": (30.22, -92.02), "Lake Charles,LA": (30.23, -93.22), "Lansing,MI": (42.73, -84.56),
+    "Las Vegas,NV": (36.17, -115.14), "Lexington,KY": (38.04, -84.50), "Lima,OH": (40.74, -84.11),
+    "Lincoln/Hastings,NE": (40.81, -96.70), "Little Rock,AR": (34.75, -92.29), "Los Angeles,CA": (34.05, -118.24),
+    "Louisville,KY": (38.25, -85.76), "Lubbock,TX": (33.58, -101.86), "Macon,GA": (32.84, -83.63),
+    "Madison,WI": (43.07, -89.40), "Mankato,MN": (44.16, -94.00), "Marquette,MI": (46.54, -87.40),
+    "Medford,OR": (42.33, -122.88), "Memphis,TN": (35.15, -90.05), "Meridian,MS": (32.36, -88.70),
+    "Miami,FL": (25.76, -80.19), "Milwaukee,WI": (43.04, -87.91), "Minneapolis,MN": (44.98, -93.27),
+    "Minot,ND": (48.23, -101.30), "Missoula,MT": (46.87, -114.00), "Mobile,AL": (30.69, -88.04),
+    "Monroe,LA": (32.51, -92.12), "Monterey,CA": (36.60, -121.89), "Montgomery,AL": (32.37, -86.30),
+    "Nashville,TN": (36.16, -86.78), "New Orleans,LA": (29.95, -90.07), "New York,NY": (40.71, -74.01),
+    "Norfolk,VA": (36.85, -76.29), "Odessa,TX": (31.85, -102.37), "Oklahoma City,OK": (35.47, -97.52),
+    "Omaha,NE": (41.26, -95.93), "Orlando,FL": (28.54, -81.38), "Ottumwa,IA": (41.02, -92.41),
+    "Paducah,KY": (37.08, -88.60), "Panama City,FL": (30.16, -85.66), "Parkersburg,WV": (39.27, -81.56),
+    "Peoria,IL": (40.69, -89.59), "Philadelphia,PA": (39.95, -75.17), "Phoenix,AZ": (33.45, -112.07),
+    "Pittsburgh,PA": (40.44, -80.00), "Portland,ME": (43.66, -70.26), "Portland,OR": (45.52, -122.68),
+    "Presque Isle,ME": (46.68, -68.02), "Providence,RI": (41.82, -71.41), "Quincy,IL": (39.94, -91.41),
+    "Raleigh,NC": (35.78, -78.64), "Rapid Cty,SD": (44.08, -103.23), "Reno,NV": (39.53, -119.81),
+    "Richmond,VA": (37.54, -77.44), "Roanoke,VA": (37.27, -79.94), "Rochester,MN": (44.01, -92.48),
+    "Rochester,NY": (43.16, -77.61), "Rockford,IL": (42.27, -89.09), "Sacramento,CA": (38.58, -121.49),
+    "Salisbury,MD": (38.36, -75.60), "Salt Lake City,UT": (40.76, -111.89), "San Angelo,TX": (31.46, -100.44),
+    "San Diego,CA": (32.72, -117.16), "San Francisco,CA": (37.77, -122.42), "Santa Barbra,CA": (34.42, -119.70),
+    "Savannah,GA": (32.08, -81.09), "Seattle,WA": (47.61, -122.33), "Sherman,TX": (33.64, -96.61),
+    "Shreveport,LA": (32.53, -93.75), "Sioux Cty,IA": (42.50, -96.40), "Sioux Falls,SD": (43.55, -96.73),
+    "South Bend,IN": (41.68, -86.25), "Spokane,WA": (47.66, -117.43), "Springfield,MA": (42.10, -72.59),
+    "Springfield,MO": (37.21, -93.29), "St. Joseph,MO": (39.77, -94.85), "St. Louis,MO": (38.63, -90.20),
+    "Syracuse,NY": (43.05, -76.15), "Tallahassee,FL": (30.44, -84.28), "Tampa,FL": (27.95, -82.46),
+    "Terre Haute,IN": (39.47, -87.41), "Toledo,OH": (41.65, -83.54), "Topeka,KS": (39.05, -95.68),
+    "Traverse City,MI": (44.76, -85.62), "Tri Cities,TN": (36.48, -82.40), "Tucson,AZ": (32.22, -110.97),
+    "Tulsa,OK": (36.15, -95.99), "Twin Falls,ID": (42.56, -114.46), "Tyler,TX": (32.35, -95.30),
+    "Utica,NY": (43.10, -75.23), "Victoria,TX": (28.81, -97.00), "Waco,TX": (31.55, -97.15),
+    "Washington,DC": (38.91, -77.04), "Watertown,NY": (43.97, -75.91), "Wausau,WI": (44.96, -89.63),
+    "West Palm Beach,FL": (26.71, -80.05), "Wheeling,WV": (40.06, -80.72), "Wichita Falls,TX": (33.91, -98.49),
+    "Wichita,KS": (37.69, -97.34), "Wilkes Barre,PA": (41.25, -75.88), "Wilmington,NC": (34.23, -77.94),
+    "Yakima,WA": (46.60, -120.51), "Youngstown,OH": (41.10, -80.65), "Yuma,AZ": (32.69, -114.63),
+    "Zanesville,OH": (39.94, -82.01),
+}
+
+# 1. Load 3 complete years (2023-2025) at DMA x Week x Product grain
+df_33 = (
+    spark.table(TABLE)
+    .withColumn("Product", F.trim("Product"))
+    .filter((F.col("year").isin([2023, 2024, 2025])) & F.col("Product").isin(list(PMAP_33.keys())))
+    .groupBy("year", "week_end", "dma_id", "Geography", "Product")
+    .agg(F.sum("dollar_sales").cast("long").alias("dollar_sales"))
+    .withColumn("cal_week", F.least((((F.dayofyear("week_end") - 1) / 7).cast("int") + 1), F.lit(52)))
+    .withColumn(
+        "season_grp",
+        F.when((F.col("cal_week") >= 18) & (F.col("cal_week") <= 35), "summer")
+         .when((F.col("cal_week") <= 9) | (F.col("cal_week") >= 44), "winter")
+         .otherwise("shoulder")
+    )
+)
+
+# 2. Compute Summer vs Winter Avg Weekly Sales & Total Sales per DMA
+dma_seas = (
+    df_33.groupBy("dma_id", "Geography", "Product")
+    .agg(
+        F.sum("dollar_sales").cast("long").alias("tot_3yr"),
+        F.avg(F.when(F.col("season_grp") == "summer", F.col("dollar_sales"))).alias("summer_wk_avg"),
+        F.avg(F.when(F.col("season_grp") == "winter", F.col("dollar_sales"))).alias("winter_wk_avg"),
+        F.sum(F.when(F.col("season_grp") == "summer", F.col("dollar_sales")).otherwise(0)).cast("long").alias("summer_sum"),
+        F.sum(F.when(F.col("season_grp") == "winter", F.col("dollar_sales")).otherwise(0)).cast("long").alias("winter_sum"),
+    )
+    .toPandas()
+)
+dma_seas["series"] = dma_seas["Product"].map(PMAP_33)
+dma_seas["sw_ratio"] = np.where(dma_seas["winter_wk_avg"] > 0, dma_seas["summer_wk_avg"] / dma_seas["winter_wk_avg"], np.nan)
+dma_seas["summer_pct"] = np.where(dma_seas["tot_3yr"] > 0, dma_seas["summer_sum"] / dma_seas["tot_3yr"] * 100, 0)
+dma_seas["winter_pct"] = np.where(dma_seas["tot_3yr"] > 0, dma_seas["winter_sum"] / dma_seas["tot_3yr"] * 100, 0)
+
+# Pivot to 1 row per DMA (196 DMAs)
+s_piv = dma_seas.pivot(index=["dma_id", "Geography"], columns="series", values=["tot_3yr", "sw_ratio", "summer_pct", "winter_pct"])
+s_piv.columns = [f"{col}_{metric}" for metric, col in s_piv.columns]
+s_piv = s_piv.reset_index().sort_values("Total NTG Sun_tot_3yr", ascending=False).reset_index(drop=True)
+s_piv["ntg_rank"] = s_piv.index + 1
+s_piv["state"] = s_piv["Geography"].str.split(",").str[-1].str.strip()
+s_piv["lat"] = s_piv["Geography"].map(lambda g: DMA_COORDS.get(g, (None, None))[0])
+s_piv["lon"] = s_piv["Geography"].map(lambda g: DMA_COORDS.get(g, (None, None))[1])
+
+# Data-driven 3 Climate Tiers (based on Total NTG Sun Summer-to-Winter Ratio)
+s_piv["Climate Tier"] = pd.qcut(
+    s_piv["Total NTG Sun_sw_ratio"],
+    q=3,
+    labels=["1. Year-Round / Warm DMAs (Lowest Swing)", "2. Moderate Seasonal DMAs (Mid Swing)", "3. Cold-Winter DMAs (Extreme Swing)"]
+)
+
+# ------------------------------------------------------------------
+# CHART 1: Ultra Sheer vs. Beach Defense Seasonality Inside Every DMA
+# ------------------------------------------------------------------
+cutoffs_33 = [("All 196", len(s_piv)), ("Top 100", 100), ("Top 80", 80), ("Top 60", 60), ("Top 20", 20)]
+fig_sw = go.Figure()
+buttons_33 = []
+
+for i, (lbl, n) in enumerate(cutoffs_33):
+    sub = s_piv.head(n).dropna(subset=["Ultra Sheer_sw_ratio", "Beach Defense_sw_ratio"]).copy()
+    is_vis = (lbl == "All 196")
+    sub["txt"] = np.where(sub["ntg_rank"] <= 8, sub["Geography"], "")
+
+    fig_sw.add_trace(
+        go.Scatter(
+            x=sub["Ultra Sheer_sw_ratio"],
+            y=sub["Beach Defense_sw_ratio"],
+            mode="markers+text",
+            text=sub["txt"],
+            textposition="top center",
+            textfont=dict(size=9),
+            visible=is_vis,
+            showlegend=False,
+            marker=dict(
+                size=np.clip(np.sqrt(sub["Total NTG Sun_tot_3yr"] / 1e6) * 4.5, 6, 32),
+                color=sub["Total NTG Sun_sw_ratio"],
+                colorscale=[[0.0, "#2DD4BF"], [0.5, "#FBBF24"], [1.0, "#EF4444"]],
+                cmin=2, cmax=16,
+                colorbar=dict(title="NTG Summer ÷<br>Winter Ratio", thickness=13),
+                line=dict(width=0.9, color="rgba(0,0,0,0.4)"),
+                opacity=0.88,
+            ),
+            customdata=list(zip(
+                sub["Geography"], sub["ntg_rank"], sub["Total NTG Sun_tot_3yr"]/1e6,
+                sub["Ultra Sheer_summer_pct"], sub["Ultra Sheer_winter_pct"],
+                sub["Beach Defense_summer_pct"], sub["Beach Defense_winter_pct"]
+            )),
+            hovertemplate=(
+                "<b>%{customdata[0]}</b> (Rank #%{customdata[1]} | NTG: $%{customdata[2]:.1f}M)<br>"
+                "Ultra Sheer: <b>%{x:.1f}x</b> Summer/Winter (%{customdata[3]:.0f}% Summer vs %{customdata[4]:.0f}% Winter)<br>"
+                "Beach Defense: <b>%{y:.1f}x</b> Summer/Winter (%{customdata[5]:.0f}% Summer vs %{customdata[6]:.0f}% Winter)"
+                "<extra></extra>"
+            ),
+        )
+    )
+
+    max_diag = min(max(sub["Ultra Sheer_sw_ratio"].max(), sub["Beach Defense_sw_ratio"].max()) * 0.9, 30)
+    fig_sw.add_trace(
+        go.Scatter(
+            x=[1, max_diag], y=[1, max_diag],
+            mode="lines", visible=is_vis,
+            name="Same Seasonality Line (y = x)",
+            line=dict(color="gray", dash="dot", width=1.6),
+            hoverinfo="skip",
+        )
+    )
+
+    vis_mask = [j in (2*i, 2*i + 1) for j in range(2 * len(cutoffs_33))]
+    buttons_33.append(dict(
+        label=lbl, method="update",
+        args=[{"visible": vis_mask},
+              {"title.text": f"<b>Seasonality Inside Each City ({lbl} DMAs): Ultra Sheer vs. Beach Defense</b><br>"
+                             "<sup>Teal = Warm Year-Round cities (2–4x) | Red = Cold-Winter cities (12–25x+) | Dots above line = Beach Defense swings harder</sup>"}]
+    ))
+
+fig_sw.update_layout(
+    template="plotly_white",
+    height=530,
+    title=dict(
+        text="<b>Seasonality Inside Each City (All 196 DMAs): Ultra Sheer vs. Beach Defense</b><br>"
+             "<sup>Teal = Warm Year-Round cities (2–4x) | Red = Cold-Winter cities (12–25x+) | Dots above line = Beach Defense swings harder</sup>",
+        x=0.5, xanchor="center", y=0.97
+    ),
+    xaxis_title="Ultra Sheer: Summer-to-Winter Ratio (Higher = More Summer-Only)",
+    yaxis_title="Beach Defense: Summer-to-Winter Ratio (Higher = More Summer-Only)",
+    updatemenus=[dict(
+        type="buttons", direction="right", x=0.5, xanchor="center", y=1.13, yanchor="top",
+        bgcolor="#F0F2F6", font=dict(size=11, color="#111111"), buttons=buttons_33,
+    )],
+    legend=dict(orientation="h", yanchor="top", y=-0.13, xanchor="center", x=0.5),
+    margin=dict(l=65, r=40, t=125, b=70),
+)
+fig_sw.show()
+
+# ------------------------------------------------------------------
+# CHART 2: US Map of All 196 DMAs Colored by Summer-to-Winter Swing
+# ------------------------------------------------------------------
+hover_33 = [
+    f"<b>{r['Geography']}</b> (Rank #{int(r['ntg_rank'])} | {r['Climate Tier'].split('(')[0].strip()})<br>"
+    f"Total NTG Sun: <b>{r['Total NTG Sun_sw_ratio']:.1f}x</b> Summer/Winter<br>"
+    f"Ultra Sheer: <b>{r['Ultra Sheer_sw_ratio']:.1f}x</b> ({r['Ultra Sheer_winter_pct']:.1f}% Winter)<br>"
+    f"Beach Defense: <b>{r['Beach Defense_sw_ratio']:.1f}x</b> ({r['Beach Defense_winter_pct']:.1f}% Winter)"
+    for _, r in s_piv.iterrows()
+]
+
+b_sizes = np.clip(np.sqrt(s_piv["Total NTG Sun_tot_3yr"] / 1e6) * 4.2, 5, 32)
+us_states = sorted([s for s in s_piv["state"].unique() if len(s) == 2 and s != "DC"])
+
+fig_smap = go.Figure()
+fig_smap.add_trace(go.Choropleth(
+    locations=us_states, locationmode="USA-states", z=[1]*len(us_states),
+    colorscale=[[0, "#F3F4F6"], [1, "#F3F4F6"]], showscale=False,
+    marker_line_color="#9CA3AF", marker_line_width=0.8, hoverinfo="skip", visible=True
+))
+
+map_views = [
+    ("Total NTG Sun_sw_ratio", "NTG Sun<br>Summer/Winter", 2, 16, True),
+    ("Ultra Sheer_sw_ratio",   "Ultra Sheer<br>Summer/Winter", 2, 14, False),
+    ("Beach Defense_sw_ratio", "Beach Defense<br>Summer/Winter", 3, 28, False),
+]
+for col_name, cb_title, cmin_v, cmax_v, vis_flag in map_views:
+    fig_smap.add_trace(go.Scattergeo(
+        lat=s_piv["lat"], lon=s_piv["lon"], mode="markers", visible=vis_flag,
+        marker=dict(
+            size=b_sizes,
+            color=s_piv[col_name].fillna(cmax_v),
+            colorscale=[[0.0, "#2DD4BF"], [0.45, "#FBBF24"], [1.0, "#EF4444"]],
+            cmin=cmin_v, cmax=cmax_v,
+            colorbar=dict(title=cb_title, thickness=14),
+            line=dict(width=0.8, color="rgba(0,0,0,0.45)"), opacity=0.9,
+        ),
+        text=hover_33, hovertemplate="%{text}<extra></extra>",
+    ))
+
+fig_smap.update_layout(
+    template="plotly_white",
+    geo=dict(scope="usa", projection_type="albers usa", showlakes=True, lakecolor="rgba(173,216,230,0.35)"),
+    height=530,
+    title=dict(
+        text="<b>US Climate Map (All 196 DMAs): Year-Round Sunbelt vs. Summer-Only North</b><br>"
+             "<sup>Teal = Steady Year-Round Markets (2–4x) | Red = Sharp Summer-Only Markets (12–25x+)</sup>",
+        x=0.5, xanchor="center", y=0.96
+    ),
+    updatemenus=[dict(
+        type="buttons", direction="right", x=0.5, xanchor="center", y=1.09, yanchor="top",
+        bgcolor="#F0F2F6", font=dict(size=11, color="#111111"),
+        buttons=[
+            dict(label="1. Total NTG Sun Swing", method="update", args=[{"visible": [True, True, False, False]}]),
+            dict(label="2. Ultra Sheer Swing",   method="update", args=[{"visible": [True, False, True, False]}]),
+            dict(label="3. Beach Defense Swing", method="update", args=[{"visible": [True, False, False, True]}]),
+        ],
+    )],
+    margin=dict(l=20, r=20, t=115, b=20),
+)
+fig_smap.show()
+
+# ------------------------------------------------------------------
+# TABLE + CHART 3: 3 Climate Groups & Week 1-52 Curves (Warm vs Cold)
+# ------------------------------------------------------------------
+climate_tbl = (
+    s_piv.groupby("Climate Tier", observed=True)
+    .agg(
+        DMA_Count=("dma_id", "count"),
+        NTG_3Yr_M=("Total NTG Sun_tot_3yr", lambda x: round(x.sum() / 1e6, 1)),
+        NTG_Ratio_Median=("Total NTG Sun_sw_ratio", lambda x: round(x.median(), 1)),
+        US_Ratio_Median=("Ultra Sheer_sw_ratio", lambda x: round(x.median(), 1)),
+        BD_Ratio_Median=("Beach Defense_sw_ratio", lambda x: round(x.median(), 1)),
+        US_Winter_Pct=("Ultra Sheer_winter_pct", lambda x: round(x.mean(), 1)),
+        BD_Winter_Pct=("Beach Defense_winter_pct", lambda x: round(x.mean(), 1)),
+        Top_Example_Cities=("Geography", lambda x: ", ".join(x.head(4))),
+    )
+    .reset_index()
+)
+climate_tbl["Share of US NTG (%)"] = (climate_tbl["NTG_3Yr_M"] / climate_tbl["NTG_3Yr_M"].sum() * 100).round(1)
+print("Data-Driven Climate Groups (All 196 DMAs split into 3 Equal Tiers by NTG Seasonality):")
+display(climate_tbl[[
+    "Climate Tier", "DMA_Count", "Share of US NTG (%)",
+    "NTG_Ratio_Median", "US_Ratio_Median", "BD_Ratio_Median",
+    "US_Winter_Pct", "BD_Winter_Pct", "Top_Example_Cities"
+]])
+
+# Join Climate Tier back to weekly Spark data to plot Warm vs Cold Week 1-52 Curves
+tier_map_df = spark.createDataFrame(s_piv[["dma_id", "Climate Tier"]].astype({"Climate Tier": "str"}))
+wk_clim = (
+    df_33.filter(F.col("Product").isin(["NEUTROGENA ULTRA SHEER SUN PRTCTN", "NEUTROGENA BEACH DEFENSE SUN PRTCTN"]))
+    .join(F.broadcast(tier_map_df), "dma_id", "inner")
+    .filter(F.col("Climate Tier").isin(["1. Year-Round / Warm DMAs (Lowest Swing)", "3. Cold-Winter DMAs (Extreme Swing)"]))
+    .groupBy("Climate Tier", "Product", "cal_week")
+    .agg(F.avg("dollar_sales").alias("avg_sales"))
+    .toPandas()
+)
+wk_clim["prod_short"] = wk_clim["Product"].map(PMAP_33)
+wk_clim["tier_short"] = np.where(wk_clim["Climate Tier"].str.startswith("1."), "Warm Year-Round DMAs", "Cold-Winter DMAs")
+
+fig_wc = go.Figure()
+wc_styles = {
+    ("Warm Year-Round DMAs", "Ultra Sheer"):   dict(color="#2DD4BF", dash="solid", width=2.6),
+    ("Warm Year-Round DMAs", "Beach Defense"): dict(color="#FBBF24", dash="dash",  width=2.6),
+    ("Cold-Winter DMAs",     "Ultra Sheer"):   dict(color="#54A24B", dash="solid", width=2.6),
+    ("Cold-Winter DMAs",     "Beach Defense"): dict(color="#EF4444", dash="dash",  width=2.8),
+}
+
+for (t_lbl, p_lbl), st in wc_styles.items():
+    sub = wk_clim[(wk_clim["tier_short"] == t_lbl) & (wk_clim["prod_short"] == p_lbl)].sort_values("cal_week")
+    sub["sidx"] = sub["avg_sales"] / sub["avg_sales"].mean()
+    fig_wc.add_trace(
+        go.Scatter(
+            x=sub["cal_week"], y=sub["sidx"],
+            name=f"{t_lbl} — {p_lbl}",
+            mode="lines",
+            line=dict(color=st["color"], dash=st["dash"], width=st["width"]),
+            hovertemplate="%{y:.2f}x avg week<extra></extra>",
+        )
+    )
+
+fig_wc.add_hline(y=1.0, line_dash="dot", line_color="gray", line_width=1.1, annotation_text="Avg Week (1.0x)")
+fig_wc.update_layout(
+    template="plotly_white",
+    height=460,
+    hovermode="x unified",
+    title=dict(
+        text="<b>Seasonality Comparison: Warm Year-Round DMAs vs. Cold-Winter DMAs (Weeks 1–52)</b><br>"
+             "<sup>Notice how Cold DMAs collapse in Winter & spike 4x+ in Summer, while Warm DMAs stay much flatter</sup>",
+        x=0.5, xanchor="center"
+    ),
+    yaxis_title="Seasonality Index (1.0 = That Group's Avg Week)",
+    xaxis=dict(
+        title="Week of Year (1 = Jan, 26 = Late Jun, 52 = Dec)",
+        tickmode="array",
+        tickvals=[1, 9, 18, 26, 35, 44, 52],
+        ticktext=["Wk 1<br>Jan", "Wk 9<br>Mar", "Wk 18<br>May", "Wk 26<br>Late Jun", "Wk 35<br>Sep", "Wk 44<br>Nov", "Wk 52<br>Dec"],
+    ),
+    legend=dict(orientation="h", yanchor="top", y=-0.17, xanchor="center", x=0.5),
+    margin=dict(l=60, r=30, t=95, b=85),
+)
+fig_wc.show()
