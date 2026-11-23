@@ -4050,3 +4050,47 @@ Look at the Teal line (Year-Round / Sunbelt): It ramps up 5–6 weeks earlier—
 Look at the Gold & Coral lines (Moderate & Extreme): They stay flat at 0.25×–0.30× all winter, don’t wake up until April (Weeks 14–15), and shoot up to 2.85×–3.05× at July 4th.
 Bottom Table (final_dma_map) — Your Ready-to-Use Lookup Table:
 Gives every single one of the 196 DMAs a clean market_scope (Core Top 100 vs. Tail 101–196) and seasonality_group, ready to join with Media Spend next!
+
+
+``````````
+
+
+Subject: Neutrogena Sun Care – Sales EDA Findings, Proposed DMA Grouping & Next Steps (2027 Geo Optimization)
+Hi Yue,
+I have completed the exploratory data analysis on the Circana Neutrogena Sun Care (2022–2026, 196 DMAs) dataset. Below is a concise summary of the key findings, our proposed DMA grouping framework, and recommendations for sign-off before we bring in the media datasets.
+1. Key Findings from Sales EDA
+Brand Sizing & Category Share (Charts 1–2):
+Ultra Sheer ($727.5M, 41.8%) and Beach Defense ($460.8M, 26.5%) together drive ~68% of all Neutrogena Sun sales, followed by Clear Face (9.7%) and Sport (6.2%).
+Total Sun category avg weekly sales grew ~40% ($33.9M/wk in 2022 to $47.3M/wk in 2026 YTD [45 weeks]), while NTG grew slower ($5.9M/wk to $7.7M/wk). As a result, NTG’s category share peaked at 19.0% in 2023 and declined to 16.2% in 2026, while Ultra Sheer held steady at 41%–43% of NTG.
+Seasonality: "Everyday" Ultra Sheer vs. "Seasonal" Beach Defense (Charts 3–6):
+Ultra Sheer moves almost 1:1 with Total NTG Sun (0.99 weekly correlation; 0.95 with Beach Defense) and shows a steadier ~9× peak-to-trough swing (12.7% winter share, 25.8% spring/fall shoulder share).
+Beach Defense is heavily summer-concentrated (~24× swing): 71.5% of its annual sales occur in May–Aug (peaking at 3.67× around July 4th) and only 7.4% in Nov–Feb. Notably, Beach Defense’s peak-week sales nearly doubled from ~$4.2M/wk (2022) to ~$8.0M/wk (2025–2026).
+Inside NTG, Ultra Sheer carries 44%–46% of sales in winter vs. 15%–18% for Beach Defense; by July 4th (Weeks 26–27), Beach Defense surges to 36.2%—nearly matching Ultra Sheer (36.7%).
+DMA Concentration & Geographic Footprint (Charts 7–8):
+Sales are highly concentrated: Top 18 DMAs = 50%, Top 60 DMAs = 80.3% (≥ $26.7K/wk), and Top 100 DMAs = 91.3% (≥ $13.6K/wk). The bottom 96 Tail DMAs (#101–196) contribute only 8.7% of sales (dropping down to $558/wk in Alpena, MI).
+Both products sell in the exact same cities (0.99 DMA correlation). Nationally, Beach Defense sells $0.63 per $1 of Ultra Sheer—with only a mild tilt toward Beach Defense in Southeast/South markets (e.g., LA at $0.68, our largest BD market at $31.7M) vs. Ultra Sheer in Northeast/Northern metros (NY $0.54, Boston & SF ~$0.50).
+2. Proposed DMA Grouping (Why 3 Behavioral Groups Instead of 196 Raw DMAs)
+Rather than modeling all 196 DMAs separately (where small markets are too noisy) or creating separate city lists per product (unnecessary given the 0.99 DMA correlation), we segmented all 196 DMAs by actual Summer-to-Winter sales behavior (May–Aug vs. Nov–Feb avg weekly sales) plus a Core (Top 100) vs. Tail (#101–196) size flag:
+Group 1 — Year-Round / Sunbelt (< 4.5× swing | 14 DMAs, 13 in Core | 16.8% of US Sales | Median 3.6×):
+Markets: Miami, Tampa, Orlando, West Palm Beach, Ft. Myers, Phoenix, San Diego.
+Behavior: Ramps up early (March / Wk 9–10) and maintains strong winter demand (18.9% of Ultra Sheer and 11.5% of Beach Defense sales occur in winter).
+Group 2 — Moderate Seasonal (4.5×–8.0× swing | 135 DMAs, 65 in Core | 70.7% of US Sales | Median 7.0×):
+Markets: New York, Los Angeles (4.7×), Boston, Chicago, DC, Dallas, Houston, Atlanta, SF.
+Behavior: Core revenue engine; ramps in April, peaks strongly between Memorial Day and July 4th, with moderate winter baseline (10.6% Ultra Sheer).
+Group 3 — Extreme Summer-Only (> 8.0× swing | 47 DMAs, 22 in Core | 12.5% of US Sales | Median 8.9×):
+Markets: Philadelphia (8.03×), Pittsburgh, Norfolk, Harrisburg, Birmingham.
+Behavior: Minimal winter demand (Beach Defense drops to 4.6% in winter) with a sharp, short late-Spring/Summer burst.
+Stability Validated: DMA seasonality ratios correlate at 0.96–0.98 across 2023–2025, with 100% (100/100) of Core Top-100 DMAs remaining in the same group across at least 2 of 3 years (74% exact match across all 3 years).
+3. Strategic Observations & Current Recommendations
+For Whom (Product Scope): Model at the Total NTG Sun (NEUTROGENA SUN PRTCTN) level as our primary baseline (supported by 0.99 correlation with Ultra Sheer across time and DMAs), while accounting for Beach Defense’s sharper summer peaks (24× swing) during peak-season planning.
+Where (Market Scope): Focus individual DMA modeling on the Core Top 100 DMAs (91.3% of sales, ≥ $13.6K/wk)—or Top 60 (80.3%) if we want tighter focus—and pool the noisy bottom 96 DMAs (#101–196, 8.7% of sales) into a single "Rest of US" bucket.
+When (Flighting & Test/Control Matching):
+Year-Round Sunbelt (14 DMAs): Support earlier spring launch (March) and continuous/lighter winter presence for Ultra Sheer.
+Moderate & Extreme Seasonal (182 DMAs): Concentrate heavy media from April (Spring Break) through Memorial Day → July 4th Peak, tapering by Labor Day (Wk 35); avoid winter spend in Extreme markets.
+Geo Experimentation: Pair test and control DMAs within the same behavioral group so seasonal curves align.
+4. Next Steps (Pending Your Sign-Off)
+Confirm DMA Scope & Grouping: Please let me know if you are comfortable locking in the Top 100 Core DMAs + Pooled Tail and these 3 behavioral DMA groups (and whether you’d like me to save the finalized DMA → Group mapping table to Unity Catalog).
+Join Media Spend Datasets (Phase 2): Once confirmed, I will ingest and join the historical Media Spend / Impression datasets by dma_id and week_end to evaluate channel & regional media efficiency (ROI / incremental lift) across these groups.
+Happy to walk through the interactive charts in a quick review whenever works for you.
+Best regards,
+Naveen
