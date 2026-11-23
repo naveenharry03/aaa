@@ -3929,3 +3929,124 @@ display(final_dma_map.head(20))
 
 # Uncomment below when Yue signs off on the DMA groups & cutoff:
 # spark.createDataFrame(final_dma_map).write.mode("overwrite").saveAsTable("`kvai-pro110033`.dev.ntg_sun_dma_groups_20261123")
+
+
+``````````````````````````````
+
+import plotly.express as px
+import plotly.graph_objects as go
+import numpy as np
+
+# 1. Attach coordinates & state to 'p' from Step 3.4
+p["state"] = p["Geography"].str.split(",").str[-1].str.strip()
+p["lat"]   = p["Geography"].map(lambda g: DMA_COORDS.get(g, (None, None))[0])
+p["lon"]   = p["Geography"].map(lambda g: DMA_COORDS.get(g, (None, None))[1])
+
+grp_colors = {
+    "1. Year-Round / Sunbelt (< 4.5x)": "#2DD4BF",
+    "2. Moderate Seasonal (4.5x - 8.0x)": "#FBBF24",
+    "3. Extreme Summer-Only (> 8.0x)": "#EF4444",
+}
+
+# ------------------------------------------------------------------
+# CHART A: US Map Colored by the 3 Final Seasonality Groups
+# ------------------------------------------------------------------
+us_states = sorted([s for s in p["state"].unique() if len(s) == 2 and s != "DC"])
+fig_gmap = go.Figure()
+
+fig_gmap.add_trace(go.Choropleth(
+    locations=us_states, locationmode="USA-states", z=[1]*len(us_states),
+    colorscale=[[0, "#F3F4F6"], [1, "#F3F4F6"]], showscale=False,
+    marker_line_color="#9CA3AF", marker_line_width=0.8, hoverinfo="skip"
+))
+
+for g_lbl, g_col in grp_colors.items():
+    sub = p[p["seasonality_group"] == g_lbl]
+    fig_gmap.add_trace(go.Scattergeo(
+        lat=sub["lat"], lon=sub["lon"],
+        name=f"{g_lbl} ({len(sub)} DMAs)",
+        mode="markers",
+        marker=dict(
+            size=np.clip(np.sqrt(sub["Total NTG Sun_tot_3yr"] / 1e6) * 4.2, 5, 30),
+            color=g_col,
+            line=dict(width=0.8, color="rgba(0,0,0,0.45)"),
+            opacity=0.9,
+        ),
+        customdata=list(zip(
+            sub["Geography"], sub["ntg_rank"], sub["market_scope"],
+            sub["Total NTG Sun_tot_3yr"]/1e6, sub["Total NTG Sun_sw_ratio"]
+        )),
+        hovertemplate=(
+            "<b>%{customdata[0]}</b> (Rank #%{customdata[1]} — %{customdata[2]})<br>"
+            "3-Yr NTG Sales: $%{customdata[3]:.1f}M<br>"
+            "Summer/Winter Swing: <b>%{customdata[4]:.1f}x</b>"
+            "<extra></extra>"
+        ),
+    ))
+
+fig_gmap.update_layout(
+    template="plotly_white",
+    geo=dict(scope="usa", projection_type="albers usa", showlakes=True, lakecolor="rgba(173,216,230,0.35)"),
+    height=500,
+    title=dict(
+        text="<b>US Map of Final DMA Groups (All 196 Cities)</b><br>"
+             "<sup>Click any group in the legend below to isolate those DMAs on the map</sup>",
+        x=0.5, xanchor="center"
+    ),
+    legend=dict(orientation="h", yanchor="top", y=-0.02, xanchor="center", x=0.5),
+    margin=dict(l=20, r=20, t=80, b=50),
+)
+fig_gmap.show()
+
+# ------------------------------------------------------------------
+# CHART B: Interactive Treemap Showing ALL 196 DMAs Inside Each Group
+# ------------------------------------------------------------------
+p["sales_3yr_m"] = (p["Total NTG Sun_tot_3yr"] / 1e6).round(2)
+
+fig_tree = px.treemap(
+    p,
+    path=["seasonality_group", "market_scope", "Geography"],
+    values="sales_3yr_m",
+    color="seasonality_group",
+    color_discrete_map=grp_colors,
+    custom_data=["ntg_rank", "Total NTG Sun_sw_ratio", "Ultra Sheer_sw_ratio", "Beach Defense_sw_ratio", "bd_per_1_us"],
+    title="<b>All 196 DMAs Grouped Visually (Click Any Group Box to Zoom Into Its Cities)</b>",
+)
+fig_tree.update_traces(
+    hovertemplate=(
+        "<b>%{label}</b><br>"
+        "3-Yr NTG Sales: <b>$%{value:.1f}M</b><br>"
+        "Rank: #%{customdata[0]} | NTG Swing: %{customdata[1]:.1f}x<br>"
+        "Ultra Sheer: %{customdata[2]:.1f}x | Beach Defense: %{customdata[3]:.1f}x<br>"
+        "BD per $1 US: $%{customdata[4]:.2f}"
+        "<extra></extra>"
+    )
+)
+fig_tree.update_layout(template="plotly_white", height=600, margin=dict(l=20, r=20, t=60, b=20))
+fig_tree.show()
+
+
+
+
+First—look at your Step 3.4 results! That bottom curve (Total NTG Sun Seasonality Curves Across the 3 Final DMA Groups) and stability check (100/100 Core DMAs stable!) came out super strong.
+Let’s answer all 3 of your questions clearly, and then give you 2 visual charts that show which exact DMAs landed in each group.
+1. Should you remove Step 3.3 and keep only Step 3.4?
+Keep the best parts of both—don’t throw away all of Step 3.3!
+In Step 3.3 — KEEP:
+Chart 1 (196-DMA Ultra Sheer vs. Beach Defense seasonality scatter)
+Chart 2 (196-DMA US Climate Map)
+In Step 3.3 — REMOVE ONLY the bottom Table + Chart 3 (the forced 66 / 65 / 65 split), because Step 3.4 completely replaced it with real, behavior-based groups (14 / 135 / 47 DMAs).
+2. What Did Step 3.4 Achieve? (Plain-English Guide for Yue)
+Think of Step 3.4 as “Finalizing the Market Playbook” before we bring in Media Spend data. Here is what your 4 Step 3.4 outputs proved:
+Table 1 (Final Behavioral DMA Groups) — Replaced random splitting with 3 real groups:
+Group 1 — Year-Round / Sunbelt (< 4.5× swing, 14 DMAs): Includes Miami, Tampa, Orlando, West Palm Beach, Ft. Myers, Phoenix, San Diego. Even though it’s only 14 cities, it drives 16.8% of all US Neutrogena sales, keeps 18.9% of Ultra Sheer sales in winter, and only swings 3.6×.
+Group 2 — Moderate Seasonal (4.5×–8.0× swing, 135 DMAs): The main US body (70.7% of sales, median 7.0×) including NY, LA (4.7×), Chicago, Boston, DC, Dallas, Houston, Atlanta.
+Group 3 — Extreme Summer-Only (> 8.0× swing, 47 DMAs): Drives 12.5% of sales (median 8.9×, Beach Defense drops to 4.6% in winter) including Philadelphia (8.03×), Pittsburgh, Norfolk, Harrisburg, Birmingham.
+Validation Table (2023 vs. 2024 vs. 2025) — Proves the groups aren’t a 1-year fluke:
+Each city’s seasonality correlates at 0.96 – 0.98 across 2023, 2024, and 2025.
+100% (100 out of 100) of Core Top-100 DMAs stayed in the same group in at least 2 out of 3 years (74% stayed in the exact same group all 3 years!).
+Bottom Line Chart (3 Group Curves, Weeks 1–52) — Visual Proof for Media Timing:
+Look at the Teal line (Year-Round / Sunbelt): It ramps up 5–6 weeks earlier—crossing 1.0× by Week 9 (early March), stays steady around 1.4×–1.8× all Spring/Summer, and holds ~0.5× in winter (double the other groups!).
+Look at the Gold & Coral lines (Moderate & Extreme): They stay flat at 0.25×–0.30× all winter, don’t wake up until April (Weeks 14–15), and shoot up to 2.85×–3.05× at July 4th.
+Bottom Table (final_dma_map) — Your Ready-to-Use Lookup Table:
+Gives every single one of the 196 DMAs a clean market_scope (Core Top 100 vs. Tail 101–196) and seasonality_group, ready to join with Media Spend next!
